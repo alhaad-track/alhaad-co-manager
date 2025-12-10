@@ -16,6 +16,8 @@
     "@radix-ui/react-slot": "^1.2.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "jspdf": "^3.0.4",
+    "jspdf-autotable": "^5.0.2",
     "leaflet": "^1.9.4",
     "leaflet-draw": "^1.0.4",
     "lucide-react": "^0.556.0",
@@ -25,6 +27,7 @@
     "react-draggable": "^4.5.0",
     "react-leaflet": "^5.0.0",
     "react-leaflet-draw": "^0.21.0",
+    "recharts": "^3.5.1",
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {

@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import Link from "next/link";
-import { Users, Car, Map, LogOut, LayoutDashboard, Hexagon, User, Bell } from "lucide-react";
+import { Users, Car, Map, LogOut, LayoutDashboard, Hexagon, User, Bell, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function DashboardLayout({
@@ -64,6 +64,10 @@ export default function DashboardLayout({
                     <Link href="/dashboard/alerts" className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors">
                         <Bell className="w-5 h-5" />
                         Alerts
+                    </Link>
+                    <Link href="/dashboard/reports" className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors">
+                        <FileText className="w-5 h-5" />
+                        Reports
                     </Link>
                 </nav>
 
