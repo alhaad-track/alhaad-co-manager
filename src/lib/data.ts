@@ -129,3 +129,42 @@ export const initialTrips: Trip[] = [
         averageSpeed: "24 km/h"
     }
 ];
+
+export const mockTripPaths: Record<string, { path: [number, number][], stops: { lat: number, lng: number, duration: string, time: string }[] }> = {
+    "v1": {
+        path: [
+            [51.515, -0.1],
+            [51.514, -0.099],
+            [51.513, -0.098],
+            [51.512, -0.097],
+            [51.511, -0.096],
+            [51.51, -0.095],
+            [51.509, -0.094],
+            [51.508, -0.093],
+            [51.507, -0.092],
+            [51.506, -0.091],
+            [51.505, -0.09]
+        ],
+        stops: [
+            { lat: 51.508, lng: -0.093, duration: "15m", time: "10:30 AM" },
+            { lat: 51.512, lng: -0.097, duration: "45m", time: "11:15 AM" }
+        ]
+    },
+    "v2": {
+        path: [
+            [51.515, -0.105],
+            [51.514, -0.104],
+            [51.513, -0.103],
+            [51.512, -0.102],
+            [51.511, -0.101],
+            [51.51, -0.1]
+        ],
+        stops: [
+            { lat: 51.513, lng: -0.103, duration: "10m", time: "09:45 AM" }
+        ]
+    },
+    "v3": {
+        path: [],
+        stops: []
+    }
+};

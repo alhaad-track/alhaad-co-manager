@@ -11,8 +11,9 @@ const MapComponent = dynamic(() => import("./MapComponent"), {
 interface MapProps {
     vehicles: Vehicle[];
     selectedVehicle?: Vehicle | null;
+    onSelectVehicle?: (vehicle: Vehicle) => void;
 }
 
-export default function Map({ vehicles, selectedVehicle }: MapProps) {
-    return <MapComponent vehicles={vehicles} selectedVehicle={selectedVehicle} />;
+export default function Map({ vehicles, selectedVehicle, onSelectVehicle }: MapProps) {
+    return <MapComponent vehicles={vehicles} selectedVehicle={selectedVehicle} onSelectVehicle={onSelectVehicle} />;
 }
