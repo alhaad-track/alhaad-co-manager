@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { MapContainer, TileLayer, FeatureGroup, Circle, Polygon, Popup, useMap } from "react-leaflet";
+import { useEffect, useRef, forwardRef, useImperativeHandle } from "react";
+import { MapContainer, TileLayer, FeatureGroup, Circle, Polygon, Popup, useMap, LayersControl } from "react-leaflet";
 import { EditControl } from "react-leaflet-draw";
 import "leaflet/dist/leaflet.css";
 import "leaflet-draw/dist/leaflet.draw.css";
@@ -58,14 +58,37 @@ function MapController({ selectedGeofenceIds, geofences }: { selectedGeofenceIds
     return null;
 }
 
-export default function GeofenceMapComponent({
+export interface GeofenceMapHandle {
+    startDrawing: () => void;
+}
+
+const GeofenceMapComponent = forwardRef<GeofenceMapHandle, GeofenceMapComponentProps>(({
     geofences,
     onGeofenceCreated,
     onGeofenceEdited,
     onGeofenceDeleted,
     selectedGeofenceIds
-}: GeofenceMapComponentProps) {
+}, ref) => {
     const featureGroupRef = useRef<L.FeatureGroup>(null);
+    const mapRef = useRef<L.Map | null>(null);
+
+    useImperativeHandle(ref, () => ({
+        startDrawing: () => {
+            if (mapRef.current) {
+                // @ts-ignore - Leaflet Draw types might be missing specific constructor
+                const polygonDrawer = new L.Draw.Polygon(mapRef.current);
+                polygonDrawer.enable();
+            }
+        }
+    }));
+
+    function MapRef() {
+        const map = useMap();
+        useEffect(() => {
+            mapRef.current = map;
+        }, [map]);
+        return null;
+    }
 
     const _onCreated = (e: any) => {
         const type = e.layerType;
@@ -106,10 +129,33 @@ export default function GeofenceMapComponent({
             zoom={13}
             style={{ height: "100%", width: "100%" }}
         >
-            <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
+            <MapRef />
+            <LayersControl position="topright">
+                <LayersControl.BaseLayer name="OpenStreetMap">
+                    <TileLayer
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                </LayersControl.BaseLayer>
+                <LayersControl.BaseLayer checked name="Google Maps (Standard)">
+                    <TileLayer
+                        url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+                        attribution="Google Maps"
+                    />
+                </LayersControl.BaseLayer>
+                <LayersControl.BaseLayer name="Google Maps (Satellite)">
+                    <TileLayer
+                        url="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
+                        attribution="Google Maps"
+                    />
+                </LayersControl.BaseLayer>
+                <LayersControl.BaseLayer name="Google Maps (Hybrid)">
+                    <TileLayer
+                        url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
+                        attribution="Google Maps"
+                    />
+                </LayersControl.BaseLayer>
+            </LayersControl>
             <MapController selectedGeofenceIds={selectedGeofenceIds} geofences={geofences} />
             <FeatureGroup ref={featureGroupRef}>
                 <EditControl
@@ -160,4 +206,6 @@ export default function GeofenceMapComponent({
             </FeatureGroup>
         </MapContainer>
     );
-}
+});
+
+export default GeofenceMapComponent;

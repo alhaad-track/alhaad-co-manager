@@ -18,6 +18,7 @@ export interface Vehicle {
     lng: number;
     driverId?: string;
     assignedGeofenceIds?: string[];
+    icon: "truck" | "car" | "van" | "bus" | "motorcycle" | "default";
 }
 
 export interface Geofence {
@@ -66,9 +67,9 @@ export const initialDrivers: Driver[] = [
 ];
 
 export const initialVehicles: Vehicle[] = [
-    { id: "v1", name: "Truck 001", model: "Volvo FH16", imei: "123456789012345", userId: "2", driverId: "d1", status: "moving", lastUpdate: "Just now", lat: 51.505, lng: -0.09, assignedGeofenceIds: ["g1"] },
-    { id: "v2", name: "Van 002", model: "Ford Transit", imei: "987654321098765", userId: "3", driverId: "d2", status: "online", lastUpdate: "5 mins ago", lat: 51.51, lng: -0.1, assignedGeofenceIds: ["g2"] },
-    { id: "v3", name: "Car 003", model: "Toyota Prius", imei: "112233445566778", status: "offline", lastUpdate: "2 hours ago", lat: 51.49, lng: -0.08 },
+    { id: "v1", name: "Truck 001", model: "Volvo FH16", imei: "123456789012345", userId: "2", driverId: "d1", status: "moving", lastUpdate: "Just now", lat: 51.505, lng: -0.09, assignedGeofenceIds: ["g1"], icon: "truck" },
+    { id: "v2", name: "Van 002", model: "Ford Transit", imei: "987654321098765", userId: "3", driverId: "d2", status: "online", lastUpdate: "5 mins ago", lat: 51.51, lng: -0.1, assignedGeofenceIds: ["g2"], icon: "van" },
+    { id: "v3", name: "Car 003", model: "Toyota Prius", imei: "112233445566778", status: "offline", lastUpdate: "2 hours ago", lat: 51.49, lng: -0.08, icon: "car" },
 ];
 
 export const initialGeofences: Geofence[] = [

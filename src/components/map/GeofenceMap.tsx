@@ -16,6 +16,9 @@ interface GeofenceMapProps {
     selectedGeofenceIds: string[];
 }
 
-export default function GeofenceMap(props: GeofenceMapProps) {
-    return <GeofenceMapComponent {...props} />;
-}
+import { forwardRef } from "react";
+import { GeofenceMapHandle } from "./GeofenceMapComponent";
+
+export default forwardRef<GeofenceMapHandle, GeofenceMapProps>(function GeofenceMap(props, ref) {
+    return <GeofenceMapComponent {...props} ref={ref} />;
+});

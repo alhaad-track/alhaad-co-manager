@@ -1,31 +1,55 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { initialGeofences, Geofence } from "@/lib/data";
 import GeofenceMap from "@/components/map/GeofenceMap";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { GeofenceMapHandle } from "@/components/map/GeofenceMapComponent";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Trash2, Map as MapIcon, Circle, Hexagon } from "lucide-react";
-
-import { Checkbox } from "@/components/ui/checkbox";
+import { List } from "lucide-react";
+import Draggable from "react-draggable";
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import GeofenceList from "@/components/geofences/GeofenceList";
 
 export default function GeofencesPage() {
     const [geofences, setGeofences] = useState<Geofence[]>(initialGeofences);
     const [newGeofenceName, setNewGeofenceName] = useState("");
     const [search, setSearch] = useState("");
     const [selectedGeofenceIds, setSelectedGeofenceIds] = useState<string[]>([]);
+    const mapRef = useRef<GeofenceMapHandle>(null);
 
     const filteredGeofences = geofences.filter(g =>
         g.name.toLowerCase().includes(search.toLowerCase())
     );
 
+    const [isNameDialogOpen, setIsNameDialogOpen] = useState(false);
+    const [pendingGeofence, setPendingGeofence] = useState<Omit<Geofence, "id"> | null>(null);
+
     const handleGeofenceCreated = (newGeofence: Omit<Geofence, "id">) => {
-        const id = Math.random().toString(36).substr(2, 9);
-        setGeofences([...geofences, { ...newGeofence, id, name: newGeofenceName || newGeofence.name }]);
+        setPendingGeofence(newGeofence);
         setNewGeofenceName("");
-        // Auto-select the new geofence
+        setIsNameDialogOpen(true);
+    };
+
+    const saveGeofence = () => {
+        if (!pendingGeofence) return;
+
+        const id = Math.random().toString(36).substr(2, 9);
+        const name = newGeofenceName.trim() || "Unnamed Geofence";
+
+        setGeofences([...geofences, { ...pendingGeofence, id, name }]);
         setSelectedGeofenceIds(prev => [...prev, id]);
+
+        setIsNameDialogOpen(false);
+        setPendingGeofence(null);
+        setNewGeofenceName("");
+    };
+
+    const handleAddZoneClick = () => {
+        if (mapRef.current) {
+            mapRef.current.startDrawing();
+        }
     };
 
     const handleGeofenceEdited = (id: string, newShape: any) => {
@@ -51,95 +75,93 @@ export default function GeofencesPage() {
         );
     };
 
+    const nodeRef = useRef(null);
+    const [isMobileListOpen, setIsMobileListOpen] = useState(false);
+
     return (
-        <div className="h-[calc(100vh-6rem)] flex flex-col space-y-4">
-            <div className="flex items-center justify-between">
-                <h2 className="text-3xl font-bold tracking-tight">Geofences</h2>
-                <div className="flex items-center gap-2">
-                    <Input
-                        placeholder="Name for next geofence..."
-                        value={newGeofenceName}
-                        onChange={(e) => setNewGeofenceName(e.target.value)}
-                        className="w-64"
-                    />
-                    <div className="text-sm text-gray-500">
-                        Use the map tools to draw
-                    </div>
-                </div>
-            </div>
+        <div className="h-[calc(100vh-6rem)] flex flex-col relative">
+            {/* Removed floating input */}
 
-            <div className="flex-1 flex gap-4 overflow-hidden">
-                {/* List Sidebar */}
-                <Card className="w-80 flex flex-col overflow-hidden">
-                    <CardHeader className="pb-3">
-                        <CardTitle className="text-lg flex justify-between items-center">
-                            Your Geofences
-                            {selectedGeofenceIds.length > 0 && (
-                                <Button variant="ghost" size="sm" onClick={() => setSelectedGeofenceIds([])} className="text-xs text-blue-600 hover:text-blue-800">
-                                    Clear ({selectedGeofenceIds.length})
-                                </Button>
-                            )}
-                        </CardTitle>
-                        <Input
-                            placeholder="Search geofences..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            className="mt-2"
-                        />
-                    </CardHeader>
-                    <CardContent className="flex-1 overflow-y-auto p-0">
-                        {filteredGeofences.map((geofence) => {
-                            const isSelected = selectedGeofenceIds.includes(geofence.id);
-                            return (
-                                <div
-                                    key={geofence.id}
-                                    className={`p-4 border-b hover:bg-gray-50 flex items-center justify-between group cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 border-l-4 border-l-blue-600' : ''}`}
-                                    onClick={() => toggleSelection(geofence.id)}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <Checkbox
-                                            checked={isSelected}
-                                            onCheckedChange={() => toggleSelection(geofence.id)}
-                                            className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
-                                        />
-                                        <div className={`p-2 rounded-full text-gray-600 ${isSelected ? 'bg-blue-200 text-blue-700' : 'bg-gray-100'}`}>
-                                            {geofence.type === 'circle' ? <Circle className="w-4 h-4" /> : <Hexagon className="w-4 h-4" />}
-                                        </div>
-                                        <div>
-                                            <div className="font-medium">{geofence.name}</div>
-                                            <div className="text-xs text-gray-500 capitalize">{geofence.type}</div>
-                                        </div>
-                                    </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
-                                        onClick={(e) => handleDeleteFromList(e, geofence.id)}
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </Button>
-                                </div>
-                            );
-                        })}
-                        {filteredGeofences.length === 0 && (
-                            <div className="p-8 text-center text-gray-500 text-sm">
-                                {search ? "No geofences match your search." : "No geofences created yet."}
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
-
+            <div className="flex-1 relative overflow-hidden rounded-xl border border-gray-200 shadow-sm">
                 {/* Map */}
-                <Card className="flex-1 overflow-hidden border-0 shadow-md">
+                <div className="absolute inset-0 z-0">
                     <GeofenceMap
+                        ref={mapRef}
                         geofences={geofences}
                         onGeofenceCreated={handleGeofenceCreated}
                         onGeofenceEdited={handleGeofenceEdited}
                         onGeofenceDeleted={handleGeofenceDeleted}
                         selectedGeofenceIds={selectedGeofenceIds}
                     />
-                </Card>
+                </div>
+
+                {/* Mobile List Trigger */}
+                <div className="absolute top-4 left-4 z-[400] md:hidden">
+                    <Sheet open={isMobileListOpen} onOpenChange={setIsMobileListOpen}>
+                        <SheetTrigger asChild>
+                            <Button variant="secondary" className="shadow-lg bg-white/90 backdrop-blur-sm">
+                                <List className="w-4 h-4 mr-2" />
+                                Geofences
+                            </Button>
+                        </SheetTrigger>
+                        <SheetContent side="left" className="w-[85vw] sm:w-[380px] p-0">
+                            <SheetTitle className="sr-only">Geofences List</SheetTitle>
+                            <GeofenceList
+                                geofences={geofences}
+                                selectedGeofenceIds={selectedGeofenceIds}
+                                onToggleSelection={toggleSelection}
+                                onDeleteGeofence={handleDeleteFromList}
+                                onClearSelection={() => setSelectedGeofenceIds([])}
+                                search={search}
+                                onSearchChange={setSearch}
+                                onAddZone={handleAddZoneClick}
+                            />
+                        </SheetContent>
+                    </Sheet>
+                </div>
+
+                {/* Desktop Floating Sidebar */}
+                <div className="hidden md:block">
+                    <Draggable handle=".drag-handle" bounds="parent" nodeRef={nodeRef}>
+                        <div ref={nodeRef} className="absolute top-4 left-4 z-[400] w-80 h-[calc(100%-2rem)] max-h-[600px] shadow-xl rounded-lg overflow-hidden bg-white">
+                            <GeofenceList
+                                geofences={geofences}
+                                selectedGeofenceIds={selectedGeofenceIds}
+                                onToggleSelection={toggleSelection}
+                                onDeleteGeofence={handleDeleteFromList}
+                                onClearSelection={() => setSelectedGeofenceIds([])}
+                                search={search}
+                                onSearchChange={setSearch}
+                                onAddZone={handleAddZoneClick}
+                            />
+                        </div>
+                    </Draggable>
+                </div>
             </div>
+
+            <Dialog open={isNameDialogOpen} onOpenChange={setIsNameDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Name Geofence</DialogTitle>
+                        <DialogDescription>
+                            Enter a name for the new geofence zone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <Input
+                            placeholder="Geofence Name"
+                            value={newGeofenceName}
+                            onChange={(e) => setNewGeofenceName(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && saveGeofence()}
+                            autoFocus
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsNameDialogOpen(false)}>Cancel</Button>
+                        <Button onClick={saveGeofence}>Save Geofence</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

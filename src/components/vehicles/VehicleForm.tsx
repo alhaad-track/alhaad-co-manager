@@ -35,7 +35,8 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
         lat: initialData?.lat || 0,
         lng: initialData?.lng || 0,
         lastUpdate: initialData?.lastUpdate || "Just now",
-        assignedGeofenceIds: initialData?.assignedGeofenceIds || []
+        assignedGeofenceIds: initialData?.assignedGeofenceIds || [],
+        icon: initialData?.icon || "default"
     });
 
     // Filter available drivers: show drivers that are NOT assigned to any vehicle OR the driver currently assigned to THIS vehicle
@@ -99,6 +100,26 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                             placeholder="Volvo FH16"
                                             disabled={readOnly}
                                         />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="icon">Icon</Label>
+                                        <Select
+                                            value={formData.icon || "default"}
+                                            onValueChange={(value: any) => setFormData({ ...formData, icon: value })}
+                                            disabled={readOnly}
+                                        >
+                                            <SelectTrigger id="icon">
+                                                <SelectValue placeholder="Select an icon" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="default">Default (Standard Marker)</SelectItem>
+                                                <SelectItem value="car">Car</SelectItem>
+                                                <SelectItem value="truck">Truck</SelectItem>
+                                                <SelectItem value="van">Van</SelectItem>
+                                                <SelectItem value="bus">Bus</SelectItem>
+                                                <SelectItem value="motorcycle">Motorcycle</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                 </div>
 

@@ -7,6 +7,8 @@ import L from "leaflet";
 import { Vehicle, mockTripPaths } from "@/lib/data";
 import PolylineDecorator from "./PolylineDecorator";
 import "leaflet-polylinedecorator";
+import { Car, Truck, Bus, Bike, Box } from "lucide-react";
+import { renderToStaticMarkup } from "react-dom/server";
 
 // Fix Leaflet icon issue
 const iconUrl = "https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png";
@@ -53,19 +55,51 @@ function MapController({ selectedVehicle }: { selectedVehicle?: Vehicle | null }
     return null;
 }
 
+// Helper to create custom marker icon
+// Helper to create custom marker icon
+const createVehicleIcon = (type: string) => {
+    if (type === "default" || !type) {
+        return customIcon;
+    }
+
+    let IconComponent = Car;
+    switch (type) {
+        case "truck": IconComponent = Truck; break;
+        case "van": IconComponent = Box; break; // Using Box as proxy for Van
+        case "bus": IconComponent = Bus; break;
+        case "motorcycle": IconComponent = Bike; break;
+        case "car": IconComponent = Car; break;
+        default: return customIcon;
+    }
+
+    const iconHtml = renderToStaticMarkup(
+        <div className="bg-white rounded-full p-1 border-2 border-blue-600 shadow-md">
+            <IconComponent className="w-5 h-5 text-blue-600" />
+        </div>
+    );
+
+    return L.divIcon({
+        html: iconHtml,
+        className: "custom-vehicle-icon",
+        iconSize: [32, 32],
+        iconAnchor: [16, 32],
+        popupAnchor: [0, -32]
+    });
+};
+
 export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicle }: MapComponentProps) {
     const selectedTrip = selectedVehicle ? mockTripPaths[selectedVehicle.id] : null;
 
     return (
         <MapContainer center={[51.505, -0.09]} zoom={13} style={{ height: "100%", width: "100%" }}>
             <LayersControl position="topright">
-                <LayersControl.BaseLayer checked name="OpenStreetMap">
+                <LayersControl.BaseLayer name="OpenStreetMap">
                     <TileLayer
                         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
                 </LayersControl.BaseLayer>
-                <LayersControl.BaseLayer name="Google Maps (Standard)">
+                <LayersControl.BaseLayer checked name="Google Maps (Standard)">
                     <TileLayer
                         url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
                         attribution="Google Maps"
@@ -125,12 +159,14 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
                 </>
             )}
 
+
+
             {/* Render Vehicles */}
             {vehicles.map((vehicle) => (
                 <Marker
                     key={vehicle.id}
                     position={[vehicle.lat, vehicle.lng]}
-                    icon={customIcon}
+                    icon={createVehicleIcon(vehicle.icon || "car")}
                     eventHandlers={{
                         click: () => {
                             if (onSelectVehicle) {
