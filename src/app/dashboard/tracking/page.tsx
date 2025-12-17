@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { initialVehicles, Vehicle } from "@/lib/data";
+import { Vehicle } from "@/lib/data";
 import Map from "@/components/map/Map";
 import TrackingStats from "@/components/tracking/TrackingStats";
 import VehicleList from "@/components/tracking/VehicleList";
@@ -10,34 +10,75 @@ import Draggable from "react-draggable";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { List } from "lucide-react";
+import { traccarApi } from "@/lib/api";
 
 export default function TrackingPage() {
-    const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles);
+    const [vehicles, setVehicles] = useState<Vehicle[]>([]);
     const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
     const nodeRef = useRef(null);
     const [isMobileListOpen, setIsMobileListOpen] = useState(false);
 
-    // Simulate live updates
+    // Initial Fetch and Polling
     useEffect(() => {
-        const interval = setInterval(() => {
-            setVehicles(currentVehicles =>
-                currentVehicles.map(v => {
-                    if (v.status === "moving") {
-                        // Move slightly randomly
-                        return {
-                            ...v,
-                            lat: v.lat + (Math.random() - 0.5) * 0.001,
-                            lng: v.lng + (Math.random() - 0.5) * 0.001,
-                            lastUpdate: "Just now"
-                        };
+        const fetchTrackingData = async () => {
+            try {
+                // 1. Fetch all devices
+                const devicesRes = await traccarApi("/api/devices");
+                if (!devicesRes.ok) return; // Silent fail on error for now, or handle UI error
+                const devices = await devicesRes.json();
+
+                // 2. Fetch all latest positions
+                const positionsRes = await traccarApi("/api/positions");
+                let positions: any[] = [];
+                if (positionsRes.ok) {
+                    positions = await positionsRes.json();
+                }
+
+                // 3. Map Data
+                const updatedVehicles: Vehicle[] = devices.map((device: any) => {
+                    // Find position for this device
+                    const pos = positions.find((p: any) => p.deviceId === device.id);
+
+                    return {
+                        id: device.id.toString(),
+                        name: device.name,
+                        model: device.model || "Unknown Model",
+                        imei: device.uniqueId,
+                        userId: device.attributes?.userId?.toString(),
+                        status: device.status,
+                        lastUpdate: pos ? new Date(pos.fixTime).toLocaleString() : new Date(device.lastUpdate).toLocaleString(),
+                        lat: pos ? pos.latitude : 0,
+                        lng: pos ? pos.longitude : 0,
+                        icon: "truck", // Could map from device category if available
+                        positionId: device.positionId?.toString(),
+                        speed: pos?.speed, // Optional, if Vehicle interface supports it
+                        course: pos?.course
+                    };
+                });
+
+                setVehicles(updatedVehicles);
+
+                // Update selected vehicle if it exists
+                if (selectedVehicle) {
+                    const updatedSelected = updatedVehicles.find(v => v.id === selectedVehicle.id);
+                    if (updatedSelected) {
+                        setSelectedVehicle(updatedSelected);
                     }
-                    return v;
-                })
-            );
-        }, 3000);
+                }
+
+            } catch (error) {
+                console.error("Error fetching tracking data:", error);
+            }
+        };
+
+        // Initial call
+        fetchTrackingData();
+
+        // Polling interval (e.g., every 5 seconds)
+        const interval = setInterval(fetchTrackingData, 5000);
 
         return () => clearInterval(interval);
-    }, []);
+    }, [selectedVehicle?.id]); // Depend on ID to allow inner update logic to check it
 
     const handleSelectVehicle = (vehicle: Vehicle) => {
         setSelectedVehicle(vehicle);

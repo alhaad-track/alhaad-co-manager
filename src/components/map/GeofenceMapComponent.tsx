@@ -121,8 +121,6 @@ const GeofenceMapComponent = forwardRef<GeofenceMapHandle, GeofenceMapComponentP
         console.log("Geofence deleted", e);
     };
 
-    const displayedGeofences = geofences.filter(g => selectedGeofenceIds.includes(g.id));
-
     return (
         <MapContainer
             center={[51.505, -0.09]}
@@ -172,7 +170,7 @@ const GeofenceMapComponent = forwardRef<GeofenceMapHandle, GeofenceMapComponentP
                         polygon: true
                     }}
                 />
-                {displayedGeofences.map((geofence) => {
+                {geofences.map((geofence) => {
                     if (geofence.type === 'circle') {
                         return (
                             <Circle

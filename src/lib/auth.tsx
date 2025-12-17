@@ -64,6 +64,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
             setUser(authenticatedUser);
             localStorage.setItem("user", JSON.stringify(authenticatedUser));
+
+            // Store Basic Auth credentials
+            const basicAuth = 'Basic ' + btoa(email + ':' + password);
+            localStorage.setItem("traccar_auth", basicAuth);
+
             router.push("/dashboard");
         } catch (error) {
             console.error("Login error:", error);
@@ -80,6 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         setUser(null);
         localStorage.removeItem("user");
+        localStorage.removeItem("traccar_auth");
         router.push("/login");
     };
 

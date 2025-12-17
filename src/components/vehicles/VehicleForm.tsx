@@ -18,9 +18,10 @@ interface VehicleFormProps {
     initialData?: Vehicle;
     isEditing?: boolean;
     readOnly?: boolean;
+    positionData?: any;
 }
 
-export default function VehicleForm({ initialData, isEditing = false, readOnly = false }: VehicleFormProps) {
+export default function VehicleForm({ initialData, isEditing = false, readOnly = false, positionData }: VehicleFormProps) {
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
 
@@ -229,6 +230,56 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                             </form>
                         </AccordionContent>
                     </AccordionItem>
+
+                    {positionData && (
+                        <AccordionItem value="position" className="border rounded-lg bg-white px-6">
+                            <AccordionTrigger className="hover:no-underline py-6">
+                                <span className="text-xl font-semibold">Current Position</span>
+                            </AccordionTrigger>
+                            <AccordionContent>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 text-sm">
+                                    <div className="space-y-3">
+                                        <h4 className="font-medium text-gray-500 uppercase text-xs tracking-wider">Location</h4>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <span className="text-gray-500">Latitude:</span>
+                                            <span className="font-medium">{positionData.latitude?.toFixed(6)}</span>
+                                            <span className="text-gray-500">Longitude:</span>
+                                            <span className="font-medium">{positionData.longitude?.toFixed(6)}</span>
+                                            <span className="text-gray-500">Altitude:</span>
+                                            <span className="font-medium">{positionData.altitude?.toFixed(1)} m</span>
+                                            <span className="text-gray-500">Speed:</span>
+                                            <span className="font-medium">{positionData.speed?.toFixed(1)} kn</span>
+                                            <span className="text-gray-500">Course:</span>
+                                            <span className="font-medium">{positionData.course}°</span>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-3">
+                                        <h4 className="font-medium text-gray-500 uppercase text-xs tracking-wider">Status & Attributes</h4>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <span className="text-gray-500">Valid Fix:</span>
+                                            <span className={positionData.valid ? "text-green-600 font-medium" : "text-red-500 font-medium"}>
+                                                {positionData.valid ? "Yes" : "No"}
+                                            </span>
+                                            <span className="text-gray-500">Ignition:</span>
+                                            <span className="font-medium">{positionData.attributes?.ignition ? "On" : "Off"}</span>
+                                            <span className="text-gray-500">Battery:</span>
+                                            <span className="font-medium">{positionData.attributes?.batteryLevel ? `${positionData.attributes.batteryLevel}%` : "N/A"}</span>
+                                            <span className="text-gray-500">Motion:</span>
+                                            <span className="font-medium">{positionData.attributes?.motion ? "Yes" : "No"}</span>
+                                            <span className="text-gray-500">Fix Time:</span>
+                                            <span className="font-medium col-span-1">{new Date(positionData.fixTime).toLocaleString()}</span>
+                                        </div>
+                                    </div>
+                                    <div className="col-span-1 md:col-span-2 mt-2">
+                                        <h4 className="font-medium text-gray-500 uppercase text-xs tracking-wider mb-2">Raw Attributes</h4>
+                                        <div className="bg-gray-50 p-2 rounded text-xs font-mono break-all text-gray-700 border">
+                                            {JSON.stringify(positionData.attributes, null, 2)}
+                                        </div>
+                                    </div>
+                                </div>
+                            </AccordionContent>
+                        </AccordionItem>
+                    )}
 
                     {(isEditing || readOnly) && initialData && (
                         <AccordionItem value="trips" className="border rounded-lg bg-white px-6">
