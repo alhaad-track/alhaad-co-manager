@@ -23,3 +23,34 @@ export async function traccarApi(endpoint: string, options: RequestInit = {}) {
     const response = await fetch(url, newOptions);
     return response;
 }
+
+// Helper to handle JSON responses
+async function fetchJson<T>(endpoint: string, options?: RequestInit): Promise<T> {
+    const res = await traccarApi(endpoint, options);
+    if (!res.ok) {
+        throw new Error(`API request to ${endpoint} failed with status ${res.status}`);
+    }
+    return res.json();
+}
+
+export async function getDevices() {
+    return fetchJson<any[]>("/api/devices");
+}
+
+export async function getGeofences() {
+    return fetchJson<any[]>("/api/geofences");
+}
+
+export async function getEvents(params: URLSearchParams) {
+    return fetchJson<any[]>(`/api/reports/events?${params.toString()}`);
+}
+
+export async function getPosition(id: string) {
+    return fetchJson<any[]>(`/api/positions?id=${id}`);
+}
+
+export async function reverseGeocode(latitude: number, longitude: number) {
+    const res = await traccarApi(`/api/server/geocode?latitude=${latitude}&longitude=${longitude}`);
+    if (!res.ok) throw new Error("Geocoding failed");
+    return res.text();
+}

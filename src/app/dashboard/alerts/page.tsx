@@ -16,7 +16,7 @@ import { AlertTriangle, MapPin, Clock, CheckCircle2, XCircle, Filter, Gauge, Inf
 import { initialVehicles, initialGeofences } from "@/lib/data";
 import { generateAlerts, Alert } from "@/lib/geofenceUtils";
 import { cn } from "@/lib/utils";
-import { traccarApi } from "@/lib/api";
+import { traccarApi, getDevices, getGeofences, getEvents, getPosition, reverseGeocode } from "@/lib/api";
 
 function AlertPositionDetails({ positionId, isOpen }: { positionId: string, isOpen: boolean }) {
     const [position, setPosition] = useState<any>(null);
@@ -31,9 +31,7 @@ function AlertPositionDetails({ positionId, isOpen }: { positionId: string, isOp
         const fetchPosition = async () => {
             setLoading(true);
             try {
-                const res = await traccarApi(`/api/positions?id=${positionId}`);
-                if (!res.ok) throw new Error("Failed to load position");
-                const data = await res.json();
+                const data = await getPosition(positionId);
                 const pos = Array.isArray(data) ? data[0] : data;
                 setPosition(pos);
                 // Initialize address if available
@@ -54,16 +52,11 @@ function AlertPositionDetails({ positionId, isOpen }: { positionId: string, isOp
         setLoadingAddress(true);
         try {
             // User requested /api/server/geocode
-            const res = await traccarApi(`/api/server/geocode?latitude=${position.latitude}&longitude=${position.longitude}`);
-            if (res.ok) {
-                const text = await res.text();
-                // Check if response is JSON or plain text. Geocoding usually returns a string address? 
-                // Or maybe the user meant a specific custom endpoint.
-                // Let's assume text for now as it's an address.
-                setAddress(text);
-            } else {
-                setAddress("Address lookup failed");
-            }
+            const text = await reverseGeocode(position.latitude, position.longitude);
+            // Geocoding usually returns a string address? 
+            // Or maybe the user meant a specific custom endpoint.
+            // Let's assume text for now as it's an address.
+            setAddress(text);
         } catch (e) {
             console.error(e);
             setAddress("Error fetching address");
@@ -122,16 +115,14 @@ export default function AlertsPage() {
         const fetchEvents = async () => {
             try {
                 // 1. Fetch Dependencies (Devices, Geofences)
-                const [devicesRes, geofencesRes] = await Promise.all([
-                    traccarApi("/api/devices"),
-                    traccarApi("/api/geofences")
+                const [devicesData, geofencesData] = await Promise.all([
+                    getDevices(),
+                    getGeofences()
                 ]);
 
-                let devices: any[] = [];
-                let geofences: any[] = [];
-
-                if (devicesRes.ok) devices = await devicesRes.json();
-                if (geofencesRes.ok) geofences = await geofencesRes.json();
+                // Assign data directly (api lib handles parsing)
+                let devices: any[] = Array.isArray(devicesData) ? devicesData : [];
+                let geofences: any[] = Array.isArray(geofencesData) ? geofencesData : [];
 
                 setAvailableDevices(devices);
 
@@ -193,15 +184,12 @@ export default function AlertsPage() {
                 } else {
                     // Otherwise verify if we need to send ALL IDs. 
                     // Usually /api/reports/events returns nothing if no devices specified.
+                    // devices.forEach(d => params.append("deviceId", d.id));
+                    // Keep existing logic
                     devices.forEach(d => params.append("deviceId", d.id));
                 }
 
-                const eventsRes = await traccarApi(`/api/reports/events?${params.toString()}`);
-                if (!eventsRes.ok) {
-                    console.error("Failed to fetch events");
-                    return;
-                }
-                const events = await eventsRes.json();
+                const events = await getEvents(params);
 
                 // 3. Map Events to Alerts
                 const mappedAlerts: Alert[] = events.map((event: any) => {
