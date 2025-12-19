@@ -41,6 +41,10 @@ export interface Trip {
     distance: string; // e.g., "120 km"
     duration: string; // e.g., "2h 15m"
     averageSpeed: string; // e.g., "65 km/h"
+    startLat?: number;
+    startLon?: number;
+    endLat?: number;
+    endLon?: number;
 }
 
 export interface Driver {
@@ -106,7 +110,11 @@ export const initialTrips: Trip[] = [
         endTime: "2023-10-25 10:30",
         distance: "150 km",
         duration: "2h 30m",
-        averageSpeed: "60 km/h"
+        averageSpeed: "60 km/h",
+        startLat: 51.505,
+        startLon: -0.09,
+        endLat: 51.515,
+        endLon: -0.1
     },
     {
         id: "t2",
@@ -117,7 +125,11 @@ export const initialTrips: Trip[] = [
         endTime: "2023-10-25 16:45",
         distance: "155 km",
         duration: "2h 45m",
-        averageSpeed: "56 km/h"
+        averageSpeed: "56 km/h",
+        startLat: 51.515,
+        startLon: -0.1,
+        endLat: 51.505,
+        endLon: -0.09
     },
     {
         id: "t3",
@@ -128,7 +140,11 @@ export const initialTrips: Trip[] = [
         endTime: "2023-10-26 09:45",
         distance: "12 km",
         duration: "30m",
-        averageSpeed: "24 km/h"
+        averageSpeed: "24 km/h",
+        startLat: 51.51,
+        startLon: -0.1,
+        endLat: 51.53,
+        endLon: -0.12
     }
 ];
 

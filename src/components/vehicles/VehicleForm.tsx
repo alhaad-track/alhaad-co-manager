@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { Vehicle, initialUsers, initialDrivers, initialVehicles, initialGeofences, initialTrips } from "@/lib/data";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -40,11 +40,99 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
         icon: initialData?.icon || "default"
     });
 
+    const [accordionValue, setAccordionValue] = useState("details");
+    const [trips, setTrips] = useState<any[]>([]); // Using any[] to match TripHistory props if we cast or map
+    const [loadingTrips, setLoadingTrips] = useState(false);
+    const [tripsError, setTripsError] = useState<string | null>(null);
+    const [tripsFetched, setTripsFetched] = useState(false);
+
+    // State for current position address
+    const [currentAddress, setCurrentAddress] = useState<string | null>(null);
+    const [loadingAddress, setLoadingAddress] = useState(false);
+
     // Filter available drivers: show drivers that are NOT assigned to any vehicle OR the driver currently assigned to THIS vehicle
     const availableDrivers = initialDrivers.filter(d => {
         const isAssignedToOther = initialVehicles.some(v => v.driverId === d.id && v.id !== initialData?.id);
         return !isAssignedToOther;
     });
+
+    const handleAccordionChange = (val: string) => {
+        setAccordionValue(val);
+        if (val === "trips" && !tripsFetched && !loadingTrips && initialData?.id) {
+            fetchTrips(initialData.id);
+        }
+    };
+
+    const handleShowCurrentAddress = async () => {
+        if (!positionData?.latitude || !positionData?.longitude) return;
+        setLoadingAddress(true);
+        try {
+            const { reverseGeocode } = await import("@/lib/api");
+            const address = await reverseGeocode(positionData.latitude, positionData.longitude);
+            setCurrentAddress(address);
+        } catch (e) {
+            console.error("Failed to fetch address", e);
+        } finally {
+            setLoadingAddress(false);
+        }
+    };
+
+    const fetchTrips = async (deviceId: string) => {
+        setLoadingTrips(true);
+        setTripsError(null);
+        try {
+            const { getTrips } = await import("@/lib/api");
+
+            const to = new Date();
+            const from = new Date();
+            from.setDate(from.getDate() - 7);
+
+            const tripParams = new URLSearchParams({
+                deviceId: deviceId,
+                from: from.toISOString(),
+                to: to.toISOString()
+            });
+
+            console.log("Fetching trips with params:", tripParams.toString());
+            const tripsData = await getTrips(tripParams);
+
+            if (Array.isArray(tripsData)) {
+                // Map API data to Trip interface expected by TripHistory
+                const mappedTrips = tripsData.map((t: any) => ({
+                    id: t.id ? t.id.toString() : Math.random().toString(),
+                    vehicleId: deviceId,
+                    startLocation: t.startAddress || (t.startLat && t.startLon ? "" : "Unknown Location"), // Leave empty if coords exist but address is missing, to trigger "Show Address" logic if we treat empty/null as missing
+                    endLocation: t.endAddress || (t.endLat && t.endLon ? "" : "Unknown Location"),
+                    startTime: t.startTime ? new Date(t.startTime).toLocaleString() : "-",
+                    endTime: t.endTime ? new Date(t.endTime).toLocaleString() : "-",
+                    distance: t.distance ? `${(t.distance / 1000).toFixed(2)} km` : "0 km",
+                    duration: t.duration ? formatDuration(t.duration) : "-",
+                    averageSpeed: t.averageSpeed ? `${(t.averageSpeed * 1.852).toFixed(1)} km/h` : "0 km/h",
+                    startLat: t.startLat,
+                    startLon: t.startLon,
+                    endLat: t.endLat,
+                    endLon: t.endLon
+                }));
+                setTrips(mappedTrips.reverse());
+            } else {
+                setTrips([]);
+            }
+            setTripsFetched(true);
+        } catch (e) {
+            console.error("Failed to load trips", e);
+            setTripsError("Failed to load trip history.");
+        } finally {
+            setLoadingTrips(false);
+        }
+    };
+
+    const formatDuration = (ms: number) => {
+        const minutes = Math.floor(ms / 60000);
+        const hours = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+        if (hours > 0) return `${hours}h ${mins}m`;
+        return `${mins}m`;
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -71,8 +159,8 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                 </h1>
             </div>
 
-            <Card className="w-full max-w-2xl mx-auto border-0 shadow-none bg-transparent">
-                <Accordion type="single" collapsible defaultValue="details" className="w-full space-y-4">
+            <Card className="w-full max-w-5xl mx-auto border-0 shadow-none bg-transparent">
+                <Accordion type="single" collapsible value={accordionValue} onValueChange={handleAccordionChange} className="w-full space-y-4">
                     <AccordionItem value="details" className="border rounded-lg bg-white px-6">
                         <AccordionTrigger className="hover:no-underline py-6">
                             <span className="text-xl font-semibold">Vehicle Details</span>
@@ -241,6 +329,26 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                     <div className="space-y-3">
                                         <h4 className="font-medium text-gray-500 uppercase text-xs tracking-wider">Location</h4>
                                         <div className="grid grid-cols-2 gap-2">
+                                            <div className="col-span-2 grid grid-cols-2 gap-2">
+                                                <span className="text-gray-500">Address:</span>
+                                                <span className="font-medium">
+                                                    {currentAddress || (positionData.address ? positionData.address : (
+                                                        <Button
+                                                            variant="ghost"
+                                                            className="h-auto p-0 text-blue-600 font-normal hover:bg-transparent hover:underline"
+                                                            onClick={handleShowCurrentAddress}
+                                                            disabled={loadingAddress}
+                                                        >
+                                                            {loadingAddress ? (
+                                                                <>
+                                                                    <Loader2 className="mr-1 h-3 w-3 animate-spin inline" />
+                                                                    Loading...
+                                                                </>
+                                                            ) : "Show Address"}
+                                                        </Button>
+                                                    ))}
+                                                </span>
+                                            </div>
                                             <span className="text-gray-500">Latitude:</span>
                                             <span className="font-medium">{positionData.latitude?.toFixed(6)}</span>
                                             <span className="text-gray-500">Longitude:</span>
@@ -284,17 +392,40 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                     {(isEditing || readOnly) && initialData && (
                         <AccordionItem value="trips" className="border rounded-lg bg-white px-6">
                             <AccordionTrigger className="hover:no-underline py-6">
-                                <span className="text-xl font-semibold">Trip History</span>
+                                <span className="text-xl font-semibold">Trip History (Last 7 Days)</span>
                             </AccordionTrigger>
                             <AccordionContent>
                                 <div className="pt-2">
-                                    <TripHistory trips={initialTrips.filter(t => t.vehicleId === initialData.id)} />
+                                    {loadingTrips ? (
+                                        <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-2"></div>
+                                            <p>Loading trips...</p>
+                                        </div>
+                                    ) : tripsError ? (
+                                        <div className="rounded-md bg-red-50 p-4 mb-4">
+                                            <p className="text-sm text-red-600 text-center">{tripsError}</p>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <TripHistory trips={trips} />
+                                            <div className="mt-4 flex justify-end border-t pt-4">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => initialData.id && fetchTrips(initialData.id)}
+                                                    disabled={loadingTrips}
+                                                >
+                                                    Refresh Report
+                                                </Button>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             </AccordionContent>
                         </AccordionItem>
                     )}
                 </Accordion>
             </Card>
-        </div>
+        </div >
     );
 }
