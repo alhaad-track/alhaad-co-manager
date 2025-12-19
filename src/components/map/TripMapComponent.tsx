@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap, LayersControl, Polyline } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
+import { reverseGeocode } from "@/lib/api";
 
 // Fix Leaflet icon issue
 const shadowUrl = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png";
@@ -37,6 +38,28 @@ const endIcon = new L.Icon({
     popupAnchor: [1, -34],
     shadowSize: [41, 41]
 });
+
+// Component to fetch and display address
+const AddressDisplay = ({ lat, lng, initialAddress }: { lat: number, lng: number, initialAddress?: string }) => {
+    const [address, setAddress] = useState<string | undefined>(initialAddress);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        if ((!address || address === "Unknown Location") && !loading) {
+            setLoading(true);
+            reverseGeocode(lat, lng)
+                .then((addr) => setAddress(addr))
+                .catch((err) => {
+                    console.error("Geocoding failed", err);
+                    setAddress("Address lookup failed");
+                })
+                .finally(() => setLoading(false));
+        }
+    }, [lat, lng, address, loading]);
+
+    if (loading) return <span className="text-gray-400 italic">Resolving...</span>;
+    return <span>{address || "Unknown location"}</span>;
+};
 
 interface TripMapComponentProps {
     route: { latitude: number; longitude: number; speed?: number; course?: number; address?: string; fixTime?: string }[];
@@ -156,7 +179,26 @@ export default function TripMapComponent({ route, tripDetails }: TripMapComponen
                 });
 
                 return (
-                    <Marker key={idx} position={[point.latitude, point.longitude]} icon={arrowIcon} zIndexOffset={-100} />
+                    <Marker key={idx} position={[point.latitude, point.longitude]} icon={arrowIcon} zIndexOffset={-100}>
+                        <Popup>
+                            <div className="p-1 min-w-[200px]">
+                                <strong className="block text-sm mb-2 border-b pb-1">Trip Point</strong>
+                                <div className="grid grid-cols-[60px_1fr] gap-1 text-xs">
+                                    <span className="text-gray-500 font-medium">Time:</span>
+                                    <span>{point.fixTime ? new Date(point.fixTime).toLocaleString() : "-"}</span>
+
+                                    <span className="text-gray-500 font-medium">Speed:</span>
+                                    <span>{point.speed ? `${(point.speed * 1.852).toFixed(1)} km/h` : "0 km/h"}</span>
+
+                                    <span className="text-gray-500 font-medium">Course:</span>
+                                    <span>{point.course}°</span>
+
+                                    <span className="text-gray-500 font-medium">Address:</span>
+                                    <AddressDisplay lat={point.latitude} lng={point.longitude} initialAddress={point.address} />
+                                </div>
+                            </div>
+                        </Popup>
+                    </Marker>
                 );
             })}
 

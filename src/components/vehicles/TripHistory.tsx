@@ -1,16 +1,17 @@
 import { useState } from "react";
 import { Trip } from "@/lib/data";
 import { Card, CardContent } from "@/components/ui/card";
-import { MapPin, Clock, Calendar, Navigation, Loader2 } from "lucide-react";
+import { Clock, Calendar, Navigation, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { reverseGeocode } from "@/lib/api";
 
 interface TripHistoryProps {
     trips: Trip[];
     onViewTrip?: (trip: Trip) => void;
+    selectedTripId?: string;
 }
 
-export default function TripHistory({ trips, onViewTrip }: TripHistoryProps) {
+export default function TripHistory({ trips, onViewTrip, selectedTripId }: TripHistoryProps) {
     const [resolvedAddresses, setResolvedAddresses] = useState<Record<string, string>>({});
     const [loadingAddresses, setLoadingAddresses] = useState<Record<string, boolean>>({});
 
@@ -136,11 +137,14 @@ export default function TripHistory({ trips, onViewTrip }: TripHistoryProps) {
                                 {onViewTrip && (
                                     <Button
                                         size="sm"
-                                        className="w-full"
+                                        className={`w-full transition-colors ${trip.id === selectedTripId
+                                                ? "bg-orange-500 text-white hover:bg-orange-600 border-transparent shadow-sm"
+                                                : "hover:bg-orange-500 hover:text-white border-gray-200 hover:border-orange-500 text-orange-600"
+                                            }`}
                                         variant="outline"
                                         onClick={() => onViewTrip(trip)}
                                     >
-                                        View Trip Route
+                                        {trip.id === selectedTripId ? "Currently Viewing" : "View Trip Route"}
                                     </Button>
                                 )}
                             </div>

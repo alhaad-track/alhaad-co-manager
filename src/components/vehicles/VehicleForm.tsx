@@ -7,14 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Save, Loader2 } from "lucide-react";
+import { ArrowLeft, Save, Loader2, ChevronUp, ChevronDown, X } from "lucide-react";
 import Link from "next/link";
 import { Vehicle, initialUsers, initialDrivers, initialVehicles, initialGeofences, initialTrips } from "@/lib/data";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import TripHistory from "./TripHistory";
 import TripMap from "@/components/map/TripMap";
-import { X } from "lucide-react";
 
 interface VehicleFormProps {
     initialData?: Vehicle;
@@ -52,6 +51,8 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
     // State for viewing trip route
     const [selectedTripRoute, setSelectedTripRoute] = useState<any[] | null>(null);
     const [selectedTripDetails, setSelectedTripDetails] = useState<any>(null);
+    const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
+    const [mapCollapsed, setMapCollapsed] = useState(false);
     const [loadingRoute, setLoadingRoute] = useState(false);
 
     // State for current position address
@@ -74,6 +75,8 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
     const handleViewTrip = async (trip: any) => {
         setLoadingRoute(true);
         setSelectedTripRoute(null);
+        setSelectedTripId(trip.id);
+        setMapCollapsed(false); // Auto-expand when selecting a new trip
         try {
             const { getRoute, reverseGeocode } = await import("@/lib/api");
 
@@ -469,16 +472,36 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                             <AccordionContent>
                                 <div className="pt-2" ref={mapRef}>
                                     {selectedTripRoute && (
-                                        <div className="mb-6 border rounded-lg overflow-hidden h-[500px] relative shadow-sm bg-gray-100">
-                                            <Button
-                                                size="icon"
-                                                variant="secondary"
-                                                className="absolute top-2 right-2 z-[400] shadow-md hover:bg-white"
-                                                onClick={() => setSelectedTripRoute(null)}
-                                            >
-                                                <X className="h-4 w-4" />
-                                            </Button>
-                                            <TripMap route={selectedTripRoute} tripDetails={selectedTripDetails} />
+                                        <div className="mb-6 border rounded-lg overflow-hidden shadow-sm bg-gray-100 transition-all duration-300">
+                                            <div className="flex items-center justify-between p-2 bg-white border-b px-4">
+                                                <h3 className="font-semibold text-sm text-gray-700">Trip Route Map</h3>
+                                                <div className="flex items-center gap-1">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onClick={() => setMapCollapsed(!mapCollapsed)}
+                                                        className="h-8 w-8 p-0"
+                                                    >
+                                                        {mapCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onClick={() => {
+                                                            setSelectedTripRoute(null);
+                                                            setSelectedTripId(null);
+                                                        }}
+                                                        className="h-8 w-8 p-0 hover:bg-red-50 hover:text-red-600"
+                                                    >
+                                                        <X className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                            {!mapCollapsed && (
+                                                <div className="h-[500px] relative">
+                                                    <TripMap route={selectedTripRoute} tripDetails={selectedTripDetails} />
+                                                </div>
+                                            )}
                                         </div>
                                     )}
 
@@ -493,7 +516,7 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                         </div>
                                     ) : (
                                         <>
-                                            <TripHistory trips={trips} onViewTrip={handleViewTrip} />
+                                            <TripHistory trips={trips} onViewTrip={handleViewTrip} selectedTripId={selectedTripId || undefined} />
                                             <div className="mt-4 flex justify-end border-t pt-4">
                                                 <Button
                                                     variant="outline"
