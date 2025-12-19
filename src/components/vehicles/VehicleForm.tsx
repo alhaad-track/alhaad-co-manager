@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,8 @@ import { Vehicle, initialUsers, initialDrivers, initialVehicles, initialGeofence
 import { Checkbox } from "@/components/ui/checkbox";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import TripHistory from "./TripHistory";
+import TripMap from "@/components/map/TripMap";
+import { X } from "lucide-react";
 
 interface VehicleFormProps {
     initialData?: Vehicle;
@@ -24,6 +26,7 @@ interface VehicleFormProps {
 export default function VehicleForm({ initialData, isEditing = false, readOnly = false, positionData }: VehicleFormProps) {
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
+    const mapRef = useRef<HTMLDivElement>(null);
 
     const [formData, setFormData] = useState<Partial<Vehicle>>({
         id: initialData?.id || "",
@@ -46,6 +49,11 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
     const [tripsError, setTripsError] = useState<string | null>(null);
     const [tripsFetched, setTripsFetched] = useState(false);
 
+    // State for viewing trip route
+    const [selectedTripRoute, setSelectedTripRoute] = useState<any[] | null>(null);
+    const [selectedTripDetails, setSelectedTripDetails] = useState<any>(null);
+    const [loadingRoute, setLoadingRoute] = useState(false);
+
     // State for current position address
     const [currentAddress, setCurrentAddress] = useState<string | null>(null);
     const [loadingAddress, setLoadingAddress] = useState(false);
@@ -60,6 +68,64 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
         setAccordionValue(val);
         if (val === "trips" && !tripsFetched && !loadingTrips && initialData?.id) {
             fetchTrips(initialData.id);
+        }
+    };
+
+    const handleViewTrip = async (trip: any) => {
+        setLoadingRoute(true);
+        setSelectedTripRoute(null);
+        try {
+            const { getRoute, reverseGeocode } = await import("@/lib/api");
+
+            const params = new URLSearchParams({
+                deviceId: trip.vehicleId,
+                from: trip.rawStartTime || new Date().toISOString(), // Fallback if missing
+                to: trip.rawEndTime || new Date().toISOString()
+            });
+
+            console.log("Fetching route with params:", params.toString());
+            const routeData = await getRoute(params);
+            setSelectedTripRoute(routeData);
+            let startAddress = trip.startLocation;
+            let endAddress = trip.endLocation;
+
+            // Resolve addresses if missing
+            if (!startAddress || startAddress === "Unknown Location") {
+                if (trip.startLat && trip.startLon) {
+                    try {
+                        startAddress = await reverseGeocode(trip.startLat, trip.startLon);
+                    } catch (err) {
+                        console.warn("Failed to resolve start address", err);
+                    }
+                }
+            }
+
+            if (!endAddress || endAddress === "Unknown Location") {
+                if (trip.endLat && trip.endLon) {
+                    try {
+                        endAddress = await reverseGeocode(trip.endLat, trip.endLon);
+                    } catch (err) {
+                        console.warn("Failed to resolve end address", err);
+                    }
+                }
+            }
+
+            setSelectedTripDetails({
+                startAddress: startAddress,
+                endAddress: endAddress,
+                startTime: trip.startTime,
+                endTime: trip.endTime
+            });
+
+            // Scroll to map
+            if (mapRef.current) {
+                mapRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+
+        } catch (e) {
+            console.error("Failed to load route", e);
+        } finally {
+            setLoadingRoute(false);
         }
     };
 
@@ -111,7 +177,9 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                     startLat: t.startLat,
                     startLon: t.startLon,
                     endLat: t.endLat,
-                    endLon: t.endLon
+                    endLon: t.endLon,
+                    rawStartTime: t.startTime,
+                    rawEndTime: t.endTime,
                 }));
                 setTrips(mappedTrips.reverse());
             } else {
@@ -159,14 +227,18 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                 </h1>
             </div>
 
+
+
             <Card className="w-full max-w-5xl mx-auto border-0 shadow-none bg-transparent">
                 <Accordion type="single" collapsible value={accordionValue} onValueChange={handleAccordionChange} className="w-full space-y-4">
                     <AccordionItem value="details" className="border rounded-lg bg-white px-6">
+                        {/* ... existing details ... */}
                         <AccordionTrigger className="hover:no-underline py-6">
                             <span className="text-xl font-semibold">Vehicle Details</span>
                         </AccordionTrigger>
                         <AccordionContent>
                             <form onSubmit={handleSubmit} className="space-y-6 pt-2">
+                                {/* ... form content ... */}
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <Label htmlFor="name">Vehicle Name</Label>
@@ -395,7 +467,21 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                 <span className="text-xl font-semibold">Trip History (Last 7 Days)</span>
                             </AccordionTrigger>
                             <AccordionContent>
-                                <div className="pt-2">
+                                <div className="pt-2" ref={mapRef}>
+                                    {selectedTripRoute && (
+                                        <div className="mb-6 border rounded-lg overflow-hidden h-[500px] relative shadow-sm bg-gray-100">
+                                            <Button
+                                                size="icon"
+                                                variant="secondary"
+                                                className="absolute top-2 right-2 z-[400] shadow-md hover:bg-white"
+                                                onClick={() => setSelectedTripRoute(null)}
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </Button>
+                                            <TripMap route={selectedTripRoute} tripDetails={selectedTripDetails} />
+                                        </div>
+                                    )}
+
                                     {loadingTrips ? (
                                         <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
                                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-2"></div>
@@ -407,7 +493,7 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                         </div>
                                     ) : (
                                         <>
-                                            <TripHistory trips={trips} />
+                                            <TripHistory trips={trips} onViewTrip={handleViewTrip} />
                                             <div className="mt-4 flex justify-end border-t pt-4">
                                                 <Button
                                                     variant="outline"

@@ -7,9 +7,10 @@ import { reverseGeocode } from "@/lib/api";
 
 interface TripHistoryProps {
     trips: Trip[];
+    onViewTrip?: (trip: Trip) => void;
 }
 
-export default function TripHistory({ trips }: TripHistoryProps) {
+export default function TripHistory({ trips, onViewTrip }: TripHistoryProps) {
     const [resolvedAddresses, setResolvedAddresses] = useState<Record<string, string>>({});
     const [loadingAddresses, setLoadingAddresses] = useState<Record<string, boolean>>({});
 
@@ -109,27 +110,39 @@ export default function TripHistory({ trips }: TripHistoryProps) {
                             </div>
 
                             {/* Stats */}
-                            <div className="md:col-span-2 grid grid-cols-3 gap-4 bg-gray-50/50 rounded-lg p-3 items-center">
-                                <div className="text-center">
-                                    <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
-                                        <Navigation className="w-4 h-4" />
-                                        <span className="text-xs font-medium">Distance</span>
+                            <div className="md:col-span-2 flex flex-col gap-3">
+                                <div className="grid grid-cols-3 gap-4 bg-gray-50/50 rounded-lg p-3 items-center">
+                                    <div className="text-center">
+                                        <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
+                                            <Navigation className="w-4 h-4" />
+                                            <span className="text-xs font-medium">Distance</span>
+                                        </div>
+                                        <p className="font-bold text-gray-900">{trip.distance}</p>
                                     </div>
-                                    <p className="font-bold text-gray-900">{trip.distance}</p>
-                                </div>
-                                <div className="text-center border-l border-gray-200">
-                                    <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
-                                        <Clock className="w-4 h-4" />
-                                        <span className="text-xs font-medium">Duration</span>
+                                    <div className="text-center border-l border-gray-200">
+                                        <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
+                                            <Clock className="w-4 h-4" />
+                                            <span className="text-xs font-medium">Duration</span>
+                                        </div>
+                                        <p className="font-bold text-gray-900">{trip.duration}</p>
                                     </div>
-                                    <p className="font-bold text-gray-900">{trip.duration}</p>
-                                </div>
-                                <div className="text-center border-l border-gray-200">
-                                    <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
-                                        <span className="text-xs font-medium">Avg Speed</span>
+                                    <div className="text-center border-l border-gray-200">
+                                        <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
+                                            <span className="text-xs font-medium">Avg Speed</span>
+                                        </div>
+                                        <p className="font-bold text-gray-900">{trip.averageSpeed}</p>
                                     </div>
-                                    <p className="font-bold text-gray-900">{trip.averageSpeed}</p>
                                 </div>
+                                {onViewTrip && (
+                                    <Button
+                                        size="sm"
+                                        className="w-full"
+                                        variant="outline"
+                                        onClick={() => onViewTrip(trip)}
+                                    >
+                                        View Trip Route
+                                    </Button>
+                                )}
                             </div>
                         </div>
                     </CardContent>
