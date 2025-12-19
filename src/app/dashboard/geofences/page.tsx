@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { initialGeofences, Geofence } from "@/lib/data";
+import { traccarApi } from "@/lib/api";
 import GeofenceMap from "@/components/map/GeofenceMap";
 import { GeofenceMapHandle } from "@/components/map/GeofenceMapComponent";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,82 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import GeofenceList from "@/components/geofences/GeofenceList";
 
 export default function GeofencesPage() {
-    const [geofences, setGeofences] = useState<Geofence[]>(initialGeofences);
+    const [geofences, setGeofences] = useState<Geofence[]>([]);
+
+    useEffect(() => {
+        const fetchGeofences = async () => {
+            try {
+                const response = await traccarApi("/api/geofences");
+                if (response.ok) {
+                    const data = await response.json();
+
+                    const mappedGeofences: Geofence[] = data.map((g: any) => {
+                        let type: "polygon" | "circle" = "polygon";
+                        let coordinates: any = [];
+                        let radius = 0;
+
+                        // Basic WKT Parser
+                        // Example: POLYGON ((33.6 73.1, 33.6 73.2, ...)) or CIRCLE (33.6 73.1, 500)
+                        const wkt = g.area || "";
+
+                        if (wkt.startsWith("POLYGON")) {
+                            type = "polygon";
+                            const content = wkt.substring(wkt.indexOf("((") + 2, wkt.lastIndexOf("))"));
+                            const pairs = content.split(",");
+                            coordinates = pairs.map((pair: string) => {
+                                const [lat, lng] = pair.trim().split(" ").map(parseFloat);
+                                return [lat, lng]; // Leaflet uses [lat, lng]
+                            });
+                        } else if (wkt.startsWith("CIRCLE")) {
+                            type = "circle";
+                            // Basic Circle parsing - Traccar syntax might vary slightly
+                            // Assuming CIRCLE (lat lng, radius) or similar
+                            // Actually Traccar usually sends `area` as proper WKT. Standard WKT doesn't have CIRCLE but Traccar extends it.
+                            // Traccar stores key params in attributes or encoded area.
+                            // Let's look for standard patterns: "CIRCLE (33.633 72.918, 150)"
+                            const content = wkt.substring(wkt.indexOf("(") + 1, wkt.lastIndexOf(")"));
+                            const parts = content.split(",");
+                            if (parts.length >= 2) {
+                                const latLngParts = parts[0].trim().split(" ");
+                                const radiusPart = parts[1].trim();
+                                if (latLngParts.length === 2) {
+                                    const lat = parseFloat(latLngParts[0]); // Traccar often does LAT then LNG for circle center in common descriptions, or LNG LAT.
+                                    // Usually WKT is LON LAT. Let's assume LON LAT order for standard WKT consistency unless proven otherwise.
+                                    // Wait, for standard WKT POLYGON it is LON LAT.
+                                    // Let's assume parsed coords: [lat, lng] from [p1, p2].
+
+                                    // RE-CHECK: Typically WKT is LON LAT.
+                                    // So [p1(lon), p2(lat)] -> return [p2, p1] for Leaflet.
+
+                                    const p1 = parseFloat(latLngParts[0]);
+                                    const p2 = parseFloat(latLngParts[1]);
+
+                                    // Assuming LAT LON
+                                    coordinates = [p1, p2];
+                                    radius = parseFloat(radiusPart);
+                                }
+                            }
+                        }
+
+                        return {
+                            id: g.id.toString(),
+                            name: g.name,
+                            description: g.description,
+                            type,
+                            coordinates,
+                            radius: type === "circle" ? radius : undefined
+                        };
+                    });
+
+                    setGeofences(mappedGeofences);
+                }
+            } catch (error) {
+                console.error("Failed to fetch geofences", error);
+            }
+        };
+
+        fetchGeofences();
+    }, []);
     const [newGeofenceName, setNewGeofenceName] = useState("");
     const [search, setSearch] = useState("");
     const [selectedGeofenceIds, setSelectedGeofenceIds] = useState<string[]>([]);

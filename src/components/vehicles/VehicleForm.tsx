@@ -1,28 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, Loader2, ChevronUp, ChevronDown, X } from "lucide-react";
 import Link from "next/link";
 import { Vehicle, initialUsers, initialDrivers, initialVehicles, initialGeofences, initialTrips } from "@/lib/data";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import TripHistory from "./TripHistory";
+import TripMap from "@/components/map/TripMap";
 
 interface VehicleFormProps {
     initialData?: Vehicle;
     isEditing?: boolean;
     readOnly?: boolean;
+    positionData?: any;
 }
 
-export default function VehicleForm({ initialData, isEditing = false, readOnly = false }: VehicleFormProps) {
+export default function VehicleForm({ initialData, isEditing = false, readOnly = false, positionData }: VehicleFormProps) {
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
+    const mapRef = useRef<HTMLDivElement>(null);
 
     const [formData, setFormData] = useState<Partial<Vehicle>>({
         id: initialData?.id || "",
@@ -39,11 +42,168 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
         icon: initialData?.icon || "default"
     });
 
+    const [accordionValue, setAccordionValue] = useState("details");
+    const [trips, setTrips] = useState<any[]>([]); // Using any[] to match TripHistory props if we cast or map
+    const [loadingTrips, setLoadingTrips] = useState(false);
+    const [tripsError, setTripsError] = useState<string | null>(null);
+    const [tripsFetched, setTripsFetched] = useState(false);
+
+    // State for viewing trip route
+    const [selectedTripRoute, setSelectedTripRoute] = useState<any[] | null>(null);
+    const [selectedTripDetails, setSelectedTripDetails] = useState<any>(null);
+    const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
+    const [mapCollapsed, setMapCollapsed] = useState(false);
+    const [loadingRoute, setLoadingRoute] = useState(false);
+
+    // State for current position address
+    const [currentAddress, setCurrentAddress] = useState<string | null>(null);
+    const [loadingAddress, setLoadingAddress] = useState(false);
+
     // Filter available drivers: show drivers that are NOT assigned to any vehicle OR the driver currently assigned to THIS vehicle
     const availableDrivers = initialDrivers.filter(d => {
         const isAssignedToOther = initialVehicles.some(v => v.driverId === d.id && v.id !== initialData?.id);
         return !isAssignedToOther;
     });
+
+    const handleAccordionChange = (val: string) => {
+        setAccordionValue(val);
+        if (val === "trips" && !tripsFetched && !loadingTrips && initialData?.id) {
+            fetchTrips(initialData.id);
+        }
+    };
+
+    const handleViewTrip = async (trip: any) => {
+        setLoadingRoute(true);
+        setSelectedTripRoute(null);
+        setSelectedTripId(trip.id);
+        setMapCollapsed(false); // Auto-expand when selecting a new trip
+        try {
+            const { getRoute, reverseGeocode } = await import("@/lib/api");
+
+            const params = new URLSearchParams({
+                deviceId: trip.vehicleId,
+                from: trip.rawStartTime || new Date().toISOString(), // Fallback if missing
+                to: trip.rawEndTime || new Date().toISOString()
+            });
+
+            console.log("Fetching route with params:", params.toString());
+            const routeData = await getRoute(params);
+            setSelectedTripRoute(routeData);
+            let startAddress = trip.startLocation;
+            let endAddress = trip.endLocation;
+
+            // Resolve addresses if missing
+            if (!startAddress || startAddress === "Unknown Location") {
+                if (trip.startLat && trip.startLon) {
+                    try {
+                        startAddress = await reverseGeocode(trip.startLat, trip.startLon);
+                    } catch (err) {
+                        console.warn("Failed to resolve start address", err);
+                    }
+                }
+            }
+
+            if (!endAddress || endAddress === "Unknown Location") {
+                if (trip.endLat && trip.endLon) {
+                    try {
+                        endAddress = await reverseGeocode(trip.endLat, trip.endLon);
+                    } catch (err) {
+                        console.warn("Failed to resolve end address", err);
+                    }
+                }
+            }
+
+            setSelectedTripDetails({
+                startAddress: startAddress,
+                endAddress: endAddress,
+                startTime: trip.startTime,
+                endTime: trip.endTime
+            });
+
+            // Scroll to map
+            if (mapRef.current) {
+                mapRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+
+        } catch (e) {
+            console.error("Failed to load route", e);
+        } finally {
+            setLoadingRoute(false);
+        }
+    };
+
+    const handleShowCurrentAddress = async () => {
+        if (!positionData?.latitude || !positionData?.longitude) return;
+        setLoadingAddress(true);
+        try {
+            const { reverseGeocode } = await import("@/lib/api");
+            const address = await reverseGeocode(positionData.latitude, positionData.longitude);
+            setCurrentAddress(address);
+        } catch (e) {
+            console.error("Failed to fetch address", e);
+        } finally {
+            setLoadingAddress(false);
+        }
+    };
+
+    const fetchTrips = async (deviceId: string) => {
+        setLoadingTrips(true);
+        setTripsError(null);
+        try {
+            const { getTrips } = await import("@/lib/api");
+
+            const to = new Date();
+            const from = new Date();
+            from.setDate(from.getDate() - 7);
+
+            const tripParams = new URLSearchParams({
+                deviceId: deviceId,
+                from: from.toISOString(),
+                to: to.toISOString()
+            });
+
+            console.log("Fetching trips with params:", tripParams.toString());
+            const tripsData = await getTrips(tripParams);
+
+            if (Array.isArray(tripsData)) {
+                // Map API data to Trip interface expected by TripHistory
+                const mappedTrips = tripsData.map((t: any) => ({
+                    id: t.id ? t.id.toString() : Math.random().toString(),
+                    vehicleId: deviceId,
+                    startLocation: t.startAddress || (t.startLat && t.startLon ? "" : "Unknown Location"), // Leave empty if coords exist but address is missing, to trigger "Show Address" logic if we treat empty/null as missing
+                    endLocation: t.endAddress || (t.endLat && t.endLon ? "" : "Unknown Location"),
+                    startTime: t.startTime ? new Date(t.startTime).toLocaleString() : "-",
+                    endTime: t.endTime ? new Date(t.endTime).toLocaleString() : "-",
+                    distance: t.distance ? `${(t.distance / 1000).toFixed(2)} km` : "0 km",
+                    duration: t.duration ? formatDuration(t.duration) : "-",
+                    averageSpeed: t.averageSpeed ? `${(t.averageSpeed * 1.852).toFixed(1)} km/h` : "0 km/h",
+                    startLat: t.startLat,
+                    startLon: t.startLon,
+                    endLat: t.endLat,
+                    endLon: t.endLon,
+                    rawStartTime: t.startTime,
+                    rawEndTime: t.endTime,
+                }));
+                setTrips(mappedTrips.reverse());
+            } else {
+                setTrips([]);
+            }
+            setTripsFetched(true);
+        } catch (e) {
+            console.error("Failed to load trips", e);
+            setTripsError("Failed to load trip history.");
+        } finally {
+            setLoadingTrips(false);
+        }
+    };
+
+    const formatDuration = (ms: number) => {
+        const minutes = Math.floor(ms / 60000);
+        const hours = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+        if (hours > 0) return `${hours}h ${mins}m`;
+        return `${mins}m`;
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -70,14 +230,18 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                 </h1>
             </div>
 
-            <Card className="w-full max-w-2xl mx-auto border-0 shadow-none bg-transparent">
-                <Accordion type="single" collapsible defaultValue="details" className="w-full space-y-4">
+
+
+            <Card className="w-full max-w-5xl mx-auto border-0 shadow-none bg-transparent">
+                <Accordion type="single" collapsible value={accordionValue} onValueChange={handleAccordionChange} className="w-full space-y-4">
                     <AccordionItem value="details" className="border rounded-lg bg-white px-6">
+                        {/* ... existing details ... */}
                         <AccordionTrigger className="hover:no-underline py-6">
                             <span className="text-xl font-semibold">Vehicle Details</span>
                         </AccordionTrigger>
                         <AccordionContent>
                             <form onSubmit={handleSubmit} className="space-y-6 pt-2">
+                                {/* ... form content ... */}
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <Label htmlFor="name">Vehicle Name</Label>
@@ -209,7 +373,7 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                         ))}
                                         {initialGeofences.length === 0 && (
                                             <p className="text-sm text-muted-foreground col-span-2 text-center py-2">
-                                                No geofences available. {!readOnly && <Link href="/dashboard/geofences" className="text-blue-600 hover:underline">Create one</Link>}
+                                                No geofences available. {!readOnly && <Link href="/dashboard/geofences" className="text-orange-600 hover:underline">Create one</Link>}
                                             </p>
                                         )}
                                     </div>
@@ -220,7 +384,7 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                         <Button variant="outline" type="button">{readOnly ? "Back" : "Cancel"}</Button>
                                     </Link>
                                     {!readOnly && (
-                                        <Button type="submit" disabled={isLoading} className="gap-2">
+                                        <Button type="submit" disabled={isLoading} className="gap-2 bg-orange-600 hover:bg-orange-700 text-white">
                                             <Save className="w-4 h-4" />
                                             {isLoading ? "Saving..." : "Save Vehicle"}
                                         </Button>
@@ -230,20 +394,148 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                         </AccordionContent>
                     </AccordionItem>
 
+                    {positionData && (
+                        <AccordionItem value="position" className="border rounded-lg bg-white px-6">
+                            <AccordionTrigger className="hover:no-underline py-6">
+                                <span className="text-xl font-semibold">Current Position</span>
+                            </AccordionTrigger>
+                            <AccordionContent>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 text-sm">
+                                    <div className="space-y-3">
+                                        <h4 className="font-medium text-gray-500 uppercase text-xs tracking-wider">Location</h4>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div className="col-span-2 grid grid-cols-2 gap-2">
+                                                <span className="text-gray-500">Address:</span>
+                                                <span className="font-medium">
+                                                    {currentAddress || (positionData.address ? positionData.address : (
+                                                        <Button
+                                                            variant="ghost"
+                                                            className="h-auto p-0 text-orange-600 font-normal hover:bg-transparent hover:underline"
+                                                            onClick={handleShowCurrentAddress}
+                                                            disabled={loadingAddress}
+                                                        >
+                                                            {loadingAddress ? (
+                                                                <>
+                                                                    <Loader2 className="mr-1 h-3 w-3 animate-spin inline" />
+                                                                    Loading...
+                                                                </>
+                                                            ) : "Show Address"}
+                                                        </Button>
+                                                    ))}
+                                                </span>
+                                            </div>
+                                            <span className="text-gray-500">Latitude:</span>
+                                            <span className="font-medium">{positionData.latitude?.toFixed(6)}</span>
+                                            <span className="text-gray-500">Longitude:</span>
+                                            <span className="font-medium">{positionData.longitude?.toFixed(6)}</span>
+                                            <span className="text-gray-500">Altitude:</span>
+                                            <span className="font-medium">{positionData.altitude?.toFixed(1)} m</span>
+                                            <span className="text-gray-500">Speed:</span>
+                                            <span className="font-medium">{positionData.speed?.toFixed(1)} kn</span>
+                                            <span className="text-gray-500">Course:</span>
+                                            <span className="font-medium">{positionData.course}°</span>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-3">
+                                        <h4 className="font-medium text-gray-500 uppercase text-xs tracking-wider">Status & Attributes</h4>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <span className="text-gray-500">Valid Fix:</span>
+                                            <span className={positionData.valid ? "text-green-600 font-medium" : "text-red-500 font-medium"}>
+                                                {positionData.valid ? "Yes" : "No"}
+                                            </span>
+                                            <span className="text-gray-500">Ignition:</span>
+                                            <span className="font-medium">{positionData.attributes?.ignition ? "On" : "Off"}</span>
+                                            <span className="text-gray-500">Battery:</span>
+                                            <span className="font-medium">{positionData.attributes?.batteryLevel ? `${positionData.attributes.batteryLevel}%` : "N/A"}</span>
+                                            <span className="text-gray-500">Motion:</span>
+                                            <span className="font-medium">{positionData.attributes?.motion ? "Yes" : "No"}</span>
+                                            <span className="text-gray-500">Fix Time:</span>
+                                            <span className="font-medium col-span-1" suppressHydrationWarning>{new Date(positionData.fixTime).toLocaleString()}</span>
+                                        </div>
+                                    </div>
+                                    <div className="col-span-1 md:col-span-2 mt-2">
+                                        <h4 className="font-medium text-gray-500 uppercase text-xs tracking-wider mb-2">Raw Attributes</h4>
+                                        <div className="bg-gray-50 p-2 rounded text-xs font-mono break-all text-gray-700 border">
+                                            {JSON.stringify(positionData.attributes, null, 2)}
+                                        </div>
+                                    </div>
+                                </div>
+                            </AccordionContent>
+                        </AccordionItem>
+                    )}
+
                     {(isEditing || readOnly) && initialData && (
                         <AccordionItem value="trips" className="border rounded-lg bg-white px-6">
                             <AccordionTrigger className="hover:no-underline py-6">
-                                <span className="text-xl font-semibold">Trip History</span>
+                                <span className="text-xl font-semibold">Trip History (Last 7 Days)</span>
                             </AccordionTrigger>
                             <AccordionContent>
-                                <div className="pt-2">
-                                    <TripHistory trips={initialTrips.filter(t => t.vehicleId === initialData.id)} />
+                                <div className="pt-2" ref={mapRef}>
+                                    {selectedTripRoute && (
+                                        <div className="mb-6 border rounded-lg overflow-hidden shadow-sm bg-gray-100 transition-all duration-300">
+                                            <div className="flex items-center justify-between p-2 bg-white border-b px-4">
+                                                <h3 className="font-semibold text-sm text-gray-700">Trip Route Map</h3>
+                                                <div className="flex items-center gap-1">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onClick={() => setMapCollapsed(!mapCollapsed)}
+                                                        className="h-8 w-8 p-0"
+                                                    >
+                                                        {mapCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onClick={() => {
+                                                            setSelectedTripRoute(null);
+                                                            setSelectedTripId(null);
+                                                        }}
+                                                        className="h-8 w-8 p-0 hover:bg-orange-50 hover:text-orange-600"
+                                                    >
+                                                        <X className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                            {!mapCollapsed && (
+                                                <div className="h-[500px] relative">
+                                                    <TripMap route={selectedTripRoute} tripDetails={selectedTripDetails} />
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {loadingTrips ? (
+                                        <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-2"></div>
+                                            <p>Loading trips...</p>
+                                        </div>
+                                    ) : tripsError ? (
+                                        <div className="rounded-md bg-red-50 p-4 mb-4">
+                                            <p className="text-sm text-red-600 text-center">{tripsError}</p>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <TripHistory trips={trips} onViewTrip={handleViewTrip} selectedTripId={selectedTripId || undefined} />
+                                            <div className="mt-4 flex justify-end border-t pt-4">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => initialData.id && fetchTrips(initialData.id)}
+                                                    disabled={loadingTrips}
+                                                    className="hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200"
+                                                >
+                                                    Refresh Report
+                                                </Button>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             </AccordionContent>
                         </AccordionItem>
                     )}
                 </Accordion>
             </Card>
-        </div>
+        </div >
     );
 }

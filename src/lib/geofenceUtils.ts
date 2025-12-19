@@ -59,9 +59,12 @@ export interface Alert {
     vehicleName: string;
     geofenceId: string;
     geofenceName: string;
-    type: "entry" | "exit";
+    positionId: string;
+    type: "entry" | "exit" | "warning" | "speed" | "other";
+    originalType: string;
     timestamp: string;
     message: string;
+    attributes?: any;
 }
 
 // Mock function to generate alerts based on current vehicle positions
@@ -90,7 +93,9 @@ export function generateAlerts(vehicles: any[], geofences: Geofence[]): Alert[] 
                     vehicleName: vehicle.name,
                     geofenceId: geofence.id,
                     geofenceName: geofence.name,
+                    positionId: "", // Mock ID
                     type: "entry",
+                    originalType: "mock-entry",
                     timestamp: "Just now",
                     message: `${vehicle.name} is inside ${geofence.name}`
                 });
@@ -105,7 +110,9 @@ export function generateAlerts(vehicles: any[], geofences: Geofence[]): Alert[] 
                     vehicleName: vehicle.name,
                     geofenceId: geofence.id,
                     geofenceName: geofence.name,
+                    positionId: "", // Mock ID
                     type: "exit",
+                    originalType: "mock-exit",
                     timestamp: "10 mins ago",
                     message: `${vehicle.name} is outside ${geofence.name}`
                 });

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { initialVehicles, Vehicle, initialUsers } from "@/lib/data";
+import { traccarApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, Search, Truck, Car, AlertCircle } from "lucide-react";
@@ -10,8 +11,47 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 export default function VehiclesPage() {
-    const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles);
+    const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [search, setSearch] = useState("");
+
+    useEffect(() => {
+        const fetchVehicles = async () => {
+            try {
+                const response = await traccarApi("/api/devices");
+                if (!response.ok) {
+                    throw new Error("Failed to fetch devices");
+                }
+                const data = await response.json();
+
+                const mappedVehicles: Vehicle[] = data.map((device: any) => ({
+                    id: device.id.toString(),
+                    name: device.name,
+                    model: device.model || "Unknown Model",
+                    imei: device.uniqueId,
+                    userId: device.attributes?.userId?.toString(), // Assuming userId might be in attributes or similar
+                    status: device.status,
+                    lastUpdate: new Date(device.lastUpdate).toLocaleString(),
+                    lat: 0, // Placeholder
+                    lng: 0, // Placeholder
+                    icon: "truck", // Default icon
+                    positionId: device.positionId?.toString(),
+                }));
+
+                setVehicles(mappedVehicles);
+            } catch (err) {
+                console.error("Error fetching vehicles:", err);
+                setError("Failed to load vehicles. Please try again later.");
+                // Fallback to initialVehicles if fetch fails, or just show error
+                // setVehicles(initialVehicles); 
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchVehicles();
+    }, []);
 
     const filteredVehicles = vehicles.filter(vehicle =>
         vehicle.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -33,6 +73,19 @@ export default function VehiclesPage() {
             default: return "text-gray-600 bg-gray-50 border-gray-200";
         }
     };
+
+    if (loading) {
+        return <div className="p-8 text-center">Loading vehicles...</div>;
+    }
+
+    if (error) {
+        return (
+            <div className="p-8 text-center text-red-500">
+                <AlertCircle className="w-8 h-8 mx-auto mb-2" />
+                <p>{error}</p>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -81,7 +134,7 @@ export default function VehiclesPage() {
                                     <span className="font-medium">{vehicle.lastUpdate}</span>
                                 </div>
                                 <div className="pt-2 flex items-center justify-between">
-                                    <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium border", getStatusColor(vehicle.status))}>
+                                    <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium border", getStatusColor(vehicle.status))} >
                                         {vehicle.status.toUpperCase()}
                                     </span>
                                     <div className="flex gap-2 ml-auto">
