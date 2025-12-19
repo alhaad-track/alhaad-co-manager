@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "@/lib/auth";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Users, Car, Map, LogOut, LayoutDashboard, Hexagon, User, Bell, FileText, Menu } from "lucide-react";
@@ -15,6 +15,7 @@ export default function DashboardLayout({
 }) {
     const { user, logout, isAuthenticated, isLoading } = useAuth();
     const router = useRouter();
+    const pathname = usePathname();
     const [open, setOpen] = useState(false);
 
     useEffect(() => {
@@ -34,50 +35,47 @@ export default function DashboardLayout({
     const SidebarContent = () => (
         <div className="flex flex-col h-full">
             <div className="p-6 border-b border-gray-200">
-                <h1 className="text-xl font-bold text-blue-600 flex items-center gap-2">
+                <h1 className="text-xl font-bold text-orange-600 flex items-center gap-2">
                     <Car className="w-6 h-6" />
                     Alhaad Track
                 </h1>
             </div>
 
             <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-                <Link href="/dashboard" onClick={() => setOpen(false)} className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors">
-                    <LayoutDashboard className="w-5 h-5" />
-                    Dashboard
-                </Link>
-                <Link href="/dashboard/users" onClick={() => setOpen(false)} className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors">
-                    <Users className="w-5 h-5" />
-                    Users
-                </Link>
-                <Link href="/dashboard/vehicles" onClick={() => setOpen(false)} className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors">
-                    <Car className="w-5 h-5" />
-                    Vehicles
-                </Link>
-                <Link href="/dashboard/tracking" onClick={() => setOpen(false)} className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors">
-                    <Map className="w-5 h-5" />
-                    Live Tracking
-                </Link>
-                <Link href="/dashboard/geofences" onClick={() => setOpen(false)} className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors">
-                    <Hexagon className="w-5 h-5" />
-                    Geofences
-                </Link>
-                <Link href="/dashboard/drivers" onClick={() => setOpen(false)} className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors">
-                    <User className="w-5 h-5" />
-                    Drivers
-                </Link>
-                <Link href="/dashboard/alerts" onClick={() => setOpen(false)} className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors">
-                    <Bell className="w-5 h-5" />
-                    Alerts
-                </Link>
-                <Link href="/dashboard/reports" onClick={() => setOpen(false)} className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors">
-                    <FileText className="w-5 h-5" />
-                    Reports
-                </Link>
+                {[
+                    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+                    { href: "/dashboard/users", label: "Users", icon: Users },
+                    { href: "/dashboard/vehicles", label: "Vehicles", icon: Car },
+                    { href: "/dashboard/tracking", label: "Live Tracking", icon: Map },
+                    { href: "/dashboard/geofences", label: "Geofences", icon: Hexagon },
+                    { href: "/dashboard/drivers", label: "Drivers", icon: User },
+                    { href: "/dashboard/alerts", label: "Alerts", icon: Bell },
+                    { href: "/dashboard/reports", label: "Reports", icon: FileText },
+                ].map((item) => {
+                    const isActive = item.href === "/dashboard"
+                        ? pathname === "/dashboard"
+                        : pathname?.startsWith(item.href);
+
+                    return (
+                        <Link
+                            key={item.href}
+                            href={item.href}
+                            onClick={() => setOpen(false)}
+                            className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive
+                                ? "bg-orange-100 text-orange-900 font-medium hover:bg-orange-200"
+                                : "text-gray-700 hover:bg-orange-50 hover:text-orange-600"
+                                }`}
+                        >
+                            <item.icon className="w-5 h-5" />
+                            {item.label}
+                        </Link>
+                    );
+                })}
             </nav>
 
             <div className="p-4 border-t border-gray-200">
                 <div className="flex items-center gap-3 px-4 py-3 mb-2">
-                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
+                    <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold">
                         {user?.name.charAt(0)}
                     </div>
                     <div className="flex-1 overflow-hidden">
@@ -107,7 +105,7 @@ export default function DashboardLayout({
                         <SidebarContent />
                     </SheetContent>
                 </Sheet>
-                <div className="flex items-center gap-2 font-bold text-blue-600">
+                <div className="flex items-center gap-2 font-bold text-orange-600">
                     <Car className="w-6 h-6" />
                     Alhaad Track
                 </div>

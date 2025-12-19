@@ -373,7 +373,7 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                         ))}
                                         {initialGeofences.length === 0 && (
                                             <p className="text-sm text-muted-foreground col-span-2 text-center py-2">
-                                                No geofences available. {!readOnly && <Link href="/dashboard/geofences" className="text-blue-600 hover:underline">Create one</Link>}
+                                                No geofences available. {!readOnly && <Link href="/dashboard/geofences" className="text-orange-600 hover:underline">Create one</Link>}
                                             </p>
                                         )}
                                     </div>
@@ -384,7 +384,7 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                         <Button variant="outline" type="button">{readOnly ? "Back" : "Cancel"}</Button>
                                     </Link>
                                     {!readOnly && (
-                                        <Button type="submit" disabled={isLoading} className="gap-2">
+                                        <Button type="submit" disabled={isLoading} className="gap-2 bg-orange-600 hover:bg-orange-700 text-white">
                                             <Save className="w-4 h-4" />
                                             {isLoading ? "Saving..." : "Save Vehicle"}
                                         </Button>
@@ -410,7 +410,7 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                                     {currentAddress || (positionData.address ? positionData.address : (
                                                         <Button
                                                             variant="ghost"
-                                                            className="h-auto p-0 text-blue-600 font-normal hover:bg-transparent hover:underline"
+                                                            className="h-auto p-0 text-orange-600 font-normal hover:bg-transparent hover:underline"
                                                             onClick={handleShowCurrentAddress}
                                                             disabled={loadingAddress}
                                                         >
@@ -491,7 +491,7 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                                             setSelectedTripRoute(null);
                                                             setSelectedTripId(null);
                                                         }}
-                                                        className="h-8 w-8 p-0 hover:bg-red-50 hover:text-red-600"
+                                                        className="h-8 w-8 p-0 hover:bg-orange-50 hover:text-orange-600"
                                                     >
                                                         <X className="h-4 w-4" />
                                                     </Button>
@@ -523,6 +523,7 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                                     size="sm"
                                                     onClick={() => initialData.id && fetchTrips(initialData.id)}
                                                     disabled={loadingTrips}
+                                                    className="hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200"
                                                 >
                                                     Refresh Report
                                                 </Button>

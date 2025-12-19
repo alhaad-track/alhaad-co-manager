@@ -61,7 +61,7 @@ export default function TripHistory({ trips, onViewTrip, selectedTripId }: TripH
                                                     (trip.startLat && trip.startLon) ? (
                                                         <Button
                                                             variant="ghost"
-                                                            className="h-auto p-0 text-blue-600 font-normal hover:bg-transparent hover:underline"
+                                                            className="h-auto p-0 text-orange-600 font-normal hover:bg-transparent hover:underline"
                                                             onClick={() => handleShowAddress(trip.id, 'start', trip.startLat, trip.startLon)}
                                                             disabled={loadingAddresses[`${trip.id}-start`]}
                                                         >
@@ -87,7 +87,7 @@ export default function TripHistory({ trips, onViewTrip, selectedTripId }: TripH
                                                     (trip.endLat && trip.endLon) ? (
                                                         <Button
                                                             variant="ghost"
-                                                            className="h-auto p-0 text-blue-600 font-normal hover:bg-transparent hover:underline"
+                                                            className="h-auto p-0 text-orange-600 font-normal hover:bg-transparent hover:underline"
                                                             onClick={() => handleShowAddress(trip.id, 'end', trip.endLat, trip.endLon)}
                                                             disabled={loadingAddresses[`${trip.id}-end`]}
                                                         >
@@ -138,8 +138,8 @@ export default function TripHistory({ trips, onViewTrip, selectedTripId }: TripH
                                     <Button
                                         size="sm"
                                         className={`w-full transition-colors ${trip.id === selectedTripId
-                                                ? "bg-orange-500 text-white hover:bg-orange-600 border-transparent shadow-sm"
-                                                : "hover:bg-orange-500 hover:text-white border-gray-200 hover:border-orange-500 text-orange-600"
+                                            ? "bg-orange-500 text-white hover:bg-orange-600 border-transparent shadow-sm"
+                                            : "hover:bg-orange-500 hover:text-white border-gray-200 hover:border-orange-500 text-orange-600"
                                             }`}
                                         variant="outline"
                                         onClick={() => onViewTrip(trip)}
