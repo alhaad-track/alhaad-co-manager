@@ -4,6 +4,7 @@ export async function traccarApi(endpoint: string, options: RequestInit = {}) {
     const url = `${TRACCAR_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
 
     const headers: Record<string, string> = {
+        "Accept": "application/json",
         ...((options.headers as Record<string, string>) || {}),
     };
 
@@ -43,6 +44,10 @@ export async function getGeofences() {
 
 export async function getEvents(params: URLSearchParams) {
     return fetchJson<any[]>(`/api/reports/events?${params.toString()}`);
+}
+
+export async function getTrips(params: URLSearchParams) {
+    return fetchJson<any[]>(`/api/reports/trips?${params.toString()}`);
 }
 
 export async function getPosition(id: string) {
