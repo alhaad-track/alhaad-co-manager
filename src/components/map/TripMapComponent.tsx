@@ -4,12 +4,21 @@ import { useEffect } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap, LayersControl, Polyline } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import "leaflet-polylinedecorator";
-import PolylineDecorator from "./PolylineDecorator";
 
 // Fix Leaflet icon issue
 const shadowUrl = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png";
 
+// Helper for speed color
+const getSpeedColor = (speed: number) => {
+    // Green Line: Stopped or moving very slowly (< 10)
+    if (speed < 10) return '#22c55e';
+    // Yellow Line: Medium speed (10 - 40)
+    if (speed < 40) return '#eab308';
+    // Red Line: Fast moving (> 40)
+    return '#ef4444';
+};
+
+// Start Icon
 const startIcon = new L.Icon({
     iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
     shadowUrl: shadowUrl,
@@ -19,18 +28,18 @@ const startIcon = new L.Icon({
     shadowSize: [41, 41]
 });
 
-// Flag icon for end point
+// End Icon (Standard Red)
 const endIcon = new L.Icon({
-    iconUrl: 'https://cdn-icons-png.flaticon.com/512/2972/2972106.png', // Checkered flag (finish)
+    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
     shadowUrl: shadowUrl,
-    iconSize: [32, 32],
-    iconAnchor: [4, 32],
-    popupAnchor: [12, -32],
-    shadowSize: [32, 32]
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
 });
 
 interface TripMapComponentProps {
-    route: { latitude: number; longitude: number; speed?: number; address?: string; fixTime?: string }[];
+    route: { latitude: number; longitude: number; speed?: number; course?: number; address?: string; fixTime?: string }[];
     tripDetails?: {
         startAddress?: string;
         endAddress?: string;
@@ -55,13 +64,35 @@ function MapController({ route }: { route: any[] }) {
 export default function TripMapComponent({ route, tripDetails }: TripMapComponentProps) {
     if (!route || route.length === 0) return <div className="h-full flex items-center justify-center">No route data</div>;
 
-    const path = route.map(p => [p.latitude, p.longitude] as [number, number]);
     const startPoint = route[0];
     const endPoint = route[route.length - 1];
 
+    // Optimize route segments for color
+    const segments = [];
+    let currentSegment = [route[0]];
+    let currentColor = getSpeedColor(route[0].speed || 0);
+
+    for (let i = 1; i < route.length; i++) {
+        const point = route[i];
+        const pointColor = getSpeedColor(point.speed || 0);
+
+        // Always add point to current segment to maintain continuity
+        currentSegment.push(point);
+
+        // If color changes or it's the last point, push segment and start new
+        if (pointColor !== currentColor || i === route.length - 1) {
+            segments.push({
+                positions: currentSegment.map(p => [p.latitude, p.longitude] as [number, number]),
+                color: currentColor
+            });
+            // Start new segment overlapping with last point
+            currentSegment = [point];
+            currentColor = pointColor;
+        }
+    }
+
     return (
         <MapContainer center={[startPoint.latitude, startPoint.longitude]} zoom={13} style={{ height: "100%", width: "100%" }}>
-            {/* ... layers ... */}
             <LayersControl position="topright">
                 <LayersControl.BaseLayer checked name="Google Maps (Standard)">
                     <TileLayer
@@ -85,26 +116,49 @@ export default function TripMapComponent({ route, tripDetails }: TripMapComponen
 
             <MapController route={route} />
 
-            <Polyline
-                positions={path}
-                color="blue"
-                weight={4}
-                opacity={0.7}
-            />
-            <PolylineDecorator
-                positions={path}
-                patterns={[
-                    {
-                        offset: '5%',
-                        repeat: '10%',
-                        symbol: L.Symbol.arrowHead({
-                            pixelSize: 12,
-                            polygon: false,
-                            pathOptions: { stroke: true, color: 'blue', weight: 2 }
-                        })
-                    }
-                ]}
-            />
+            {/* Colored Speed Segments */}
+            {segments.map((seg, idx) => (
+                <Polyline
+                    key={idx}
+                    positions={seg.positions}
+                    pathOptions={{ color: seg.color, weight: 4, opacity: 0.8 }}
+                />
+            ))}
+
+            {/* Direction Arrows as Markers */}
+            {route.map((point, idx) => {
+                // Show arrow every 20th point to avoid clutter
+                if (idx % 20 !== 0 || idx === 0 || idx === route.length - 1) return null;
+
+                const rotation = point.course || 0;
+
+                // Custom divIcon for rotated arrow
+                const arrowIcon = L.divIcon({
+                    className: 'bg-transparent',
+                    html: `<div style="
+                        background-color: #10b981; 
+                        border: 2px solid white; 
+                        border-radius: 50%; 
+                        width: 24px; 
+                        height: 24px; 
+                        display: flex; 
+                        align-items: center; 
+                        justify-content: center; 
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                        transform: rotate(${rotation}deg);
+                    ">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 19V5M5 12l7-7 7 7" />
+                        </svg>
+                    </div>`,
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 12] // Center
+                });
+
+                return (
+                    <Marker key={idx} position={[point.latitude, point.longitude]} icon={arrowIcon} zIndexOffset={-100} />
+                );
+            })}
 
             <Marker position={[startPoint.latitude, startPoint.longitude]} icon={startIcon}>
                 <Popup>
