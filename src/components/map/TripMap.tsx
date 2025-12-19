@@ -15,8 +15,9 @@ interface TripMapProps {
         startTime?: string;
         endTime?: string;
     };
+    showAllMarkers?: boolean;
 }
 
-export default function TripMap({ route, tripDetails }: TripMapProps) {
-    return <TripMapComponent route={route} tripDetails={tripDetails} />;
+export default function TripMap({ route, tripDetails, showAllMarkers }: TripMapProps) {
+    return <TripMapComponent route={route} tripDetails={tripDetails} showAllMarkers={showAllMarkers} />;
 }

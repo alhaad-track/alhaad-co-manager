@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { FileText, Download, Loader2, TrendingUp, Filter, AlertTriangle, MapPin, Navigation, Clock, Activity, StopCircle } from "lucide-react";
+import { FileText, Download, Loader2, TrendingUp, Filter, AlertTriangle, MapPin, Navigation, Clock, Activity, StopCircle, ChevronDown, ChevronUp } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line } from 'recharts';
@@ -16,8 +16,10 @@ import {
   getEvents,
   getStops,
   getSummary,
-  getRoute
+  getRoute,
+  reverseGeocode
 } from "@/lib/api";
+import TripMap from "@/components/map/TripMap";
 
 // Helper to format duration
 const formatDuration = (ms: number) => {
@@ -41,6 +43,17 @@ export default function ReportGenerator() {
   const [reportData, setReportData] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  // Map state
+  const [isMapCollapsed, setIsMapCollapsed] = useState(false);
+
+  // Address state for route report
+  const [addressMap, setAddressMap] = useState<Record<number, string>>({});
+  const [loadingAddresses, setLoadingAddresses] = useState<Record<number, boolean>>({});
+
+  // Trip Map state
+  const [selectedTripRoute, setSelectedTripRoute] = useState<any[]>([]);
+  const [loadingTripRoute, setLoadingTripRoute] = useState<string | null>(null); // Stores trip ID or index being loaded
+
   // Fetch devices on mount
   useEffect(() => {
     const fetchDevices = async () => {
@@ -62,6 +75,9 @@ export default function ReportGenerator() {
   useEffect(() => {
     setReportData([]);
     setError(null);
+    setAddressMap({});
+    setLoadingAddresses({});
+    setSelectedTripRoute([]);
   }, [selectedDeviceId, reportType, period, customFrom, customTo]);
 
   const getDateRange = () => {
@@ -106,6 +122,9 @@ export default function ReportGenerator() {
     setLoading(true);
     setError(null);
     setReportData([]);
+    setAddressMap({});
+    setLoadingAddresses({});
+    setSelectedTripRoute([]);
 
     try {
       const range = getDateRange();
@@ -132,6 +151,39 @@ export default function ReportGenerator() {
       setError(err.message || "Failed to generate report.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleShowAddress = async (lat: number, lon: number, index: number) => {
+    if (!lat || !lon) return;
+    setLoadingAddresses(prev => ({ ...prev, [index]: true }));
+    try {
+      const address = await reverseGeocode(lat, lon);
+      setAddressMap(prev => ({ ...prev, [index]: address }));
+    } catch (err) {
+      console.error("Failed to fetch address", err);
+    } finally {
+      setLoadingAddresses(prev => ({ ...prev, [index]: false }));
+    }
+  };
+
+  const handleShowTripRoute = async (trip: any, index: number) => {
+    setLoadingTripRoute(index.toString());
+    try {
+      // Fetch route for specific trip duration
+      const params = new URLSearchParams({
+        deviceId: selectedDeviceId,
+        from: new Date(trip.startTime).toISOString(),
+        to: new Date(trip.endTime).toISOString()
+      });
+      const routeData = await getRoute(params);
+      setSelectedTripRoute(routeData);
+      setIsMapCollapsed(false); // Auto expand map
+    } catch (err) {
+      console.error("Failed to fetch trip route", err);
+      setError("Failed to load map for this trip.");
+    } finally {
+      setLoadingTripRoute(null);
     }
   };
 
@@ -231,7 +283,6 @@ export default function ReportGenerator() {
       let head: string[][] = [];
       let body: string[][] = [];
 
-      // ... (Table logic same as before, abbreviated here for brevity in rewrite logic but fully included in file write)
       if (reportType === "trips") {
         head = [['Start Time', 'End Time', 'Distance (km)', 'Avg Speed (kn)', 'Duration']];
         body = reportData.map(t => [new Date(t.startTime).toLocaleString(), new Date(t.endTime).toLocaleString(), (t.distance / 1000).toFixed(2), t.averageSpeed?.toFixed(1) || "0", formatDuration(t.duration)]);
@@ -246,7 +297,14 @@ export default function ReportGenerator() {
         body = reportData.map(s => [deviceName, (s.distance / 1000).toFixed(2), s.maxSpeed?.toFixed(1) || "0"]);
       } else if (reportType === "route") {
         head = [['Time', 'Lat', 'Lon', 'Speed', 'Address']];
-        body = reportData.slice(0, 500).map(p => [new Date(p.fixTime).toLocaleString(), p.latitude?.toFixed(5) || "0", p.longitude?.toFixed(5) || "0", p.speed ? (p.speed * 1.852).toFixed(1) : "0", p.address || "-"]);
+        // For PDF, we just hyphen for async addresses to keep it synchronous and simple, or could pre-fetch
+        body = reportData.slice(0, 500).map((p, idx) => [
+          new Date(p.fixTime).toLocaleString(),
+          p.latitude?.toFixed(5) || "0",
+          p.longitude?.toFixed(5) || "0",
+          p.speed ? (p.speed * 1.852).toFixed(1) : "0",
+          addressMap[idx] || p.address || "-"
+        ]);
       }
 
       autoTable(doc, { startY: 50, head, body });
@@ -254,8 +312,6 @@ export default function ReportGenerator() {
       setIsGeneratingPdf(false);
     }, 100);
   };
-
-
 
   return (
     <div className="space-y-8">
@@ -266,7 +322,6 @@ export default function ReportGenerator() {
           <CardDescription>Select device and parameters to generate detailed reports.</CardDescription>
         </CardHeader>
         <CardContent>
-          {/* ... Inputs ... */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
             <div className="space-y-2"><Label>Device</Label><Select value={selectedDeviceId} onValueChange={setSelectedDeviceId}><SelectTrigger><SelectValue placeholder="Select Device" /></SelectTrigger><SelectContent>{devices.map(d => (<SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>))}</SelectContent></Select></div>
             <div className="space-y-2"><Label>Report Type</Label><Select value={reportType} onValueChange={setReportType}><SelectTrigger><SelectValue placeholder="Select Type" /></SelectTrigger><SelectContent><SelectItem value="trips">Trips</SelectItem><SelectItem value="stops">Stops</SelectItem><SelectItem value="summary">Summary</SelectItem><SelectItem value="events">Events</SelectItem><SelectItem value="route">Route (Raw Data)</SelectItem></SelectContent></Select></div>
@@ -302,6 +357,39 @@ export default function ReportGenerator() {
                   </CardContent>
                 </Card>
               ))}
+            </div>
+          )}
+
+          {/* Trip Map for Route/Stops Report and Trips Selection (Collapsible) */}
+          {(reportType === 'route' || reportType === 'stops' || (reportType === 'trips' && selectedTripRoute.length > 0)) && (
+            <div className="mb-6 border rounded-lg overflow-hidden shadow-sm bg-gray-100 transition-all duration-300">
+              <div className="flex items-center justify-between p-2 bg-white border-b px-4 cursor-pointer" onClick={() => setIsMapCollapsed(!isMapCollapsed)}>
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-orange-600" />
+                  <h3 className="font-semibold text-sm text-gray-700">
+                    {reportType === 'stops' ? 'Stops Visualization' :
+                      reportType === 'trips' ? 'Trip Route Visualization' :
+                        'Route Map Visualization'}
+                  </h3>
+                </div>
+                <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
+                  {isMapCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                </Button>
+              </div>
+              {!isMapCollapsed && (
+                <div className="h-[400px] relative">
+                  <TripMap
+                    showAllMarkers={reportType === 'stops'}
+                    route={reportType === 'trips' ? selectedTripRoute : reportData.map(p => ({
+                      latitude: p.latitude,
+                      longitude: p.longitude,
+                      fixTime: p.startTime || p.fixTime,
+                      speed: p.speed || 0,
+                      address: p.address
+                    }))}
+                  />
+                </div>
+              )}
             </div>
           )}
 
@@ -349,7 +437,7 @@ export default function ReportGenerator() {
               <table className="w-full text-sm text-left">
                 <thead className="text-xs text-gray-500 uppercase bg-orange-50/50 border-b">
                   <tr>
-                    {reportType === "trips" && ["Start Time", "End Time", "Distance", "Avg Speed", "Duration"].map(h => <th key={h} className="px-6 py-3 font-medium">{h}</th>)}
+                    {reportType === "trips" && ["Start Time", "End Time", "Distance", "Avg Speed", "Duration", "Actions"].map(h => <th key={h} className="px-6 py-3 font-medium">{h}</th>)}
                     {reportType === "stops" && ["Start Time", "End Time", "Duration", "Address"].map(h => <th key={h} className="px-6 py-3 font-medium">{h}</th>)}
                     {reportType === "events" && ["Time", "Type", "Geofence / Attributes"].map(h => <th key={h} className="px-6 py-3 font-medium">{h}</th>)}
                     {reportType === "summary" && ["Device", "Distance", "Max Speed", "Engine Hours"].map(h => <th key={h} className="px-6 py-3 font-medium">{h}</th>)}
@@ -359,11 +447,60 @@ export default function ReportGenerator() {
                 <tbody className="divide-y divide-gray-100">
                   {reportData.slice(0, 100).map((row, idx) => (
                     <tr key={idx} className="bg-white hover:bg-gray-50/50 transition-colors">
-                      {reportType === "trips" && (<><td className="px-6 py-4">{new Date(row.startTime).toLocaleString()}</td><td className="px-6 py-4">{new Date(row.endTime).toLocaleString()}</td><td className="px-6 py-4">{(row.distance / 1000).toFixed(2)} km</td><td className="px-6 py-4">{row.averageSpeed ? (row.averageSpeed * 1.852).toFixed(1) : "0"} km/h</td><td className="px-6 py-4">{formatDuration(row.duration)}</td></>)}
-                      {reportType === "stops" && (<><td className="px-6 py-4">{new Date(row.startTime).toLocaleString()}</td><td className="px-6 py-4">{new Date(row.endTime).toLocaleString()}</td><td className="px-6 py-4">{formatDuration(row.duration)}</td><td className="px-6 py-4 text-gray-500 truncate max-w-xs">{row.address || "-"}</td></>)}
+                      {reportType === "trips" && (<><td className="px-6 py-4">{new Date(row.startTime).toLocaleString()}</td><td className="px-6 py-4">{new Date(row.endTime).toLocaleString()}</td><td className="px-6 py-4">{(row.distance / 1000).toFixed(2)} km</td><td className="px-6 py-4">{row.averageSpeed ? (row.averageSpeed * 1.852).toFixed(1) : "0"} km/h</td><td className="px-6 py-4">{formatDuration(row.duration)}</td>
+                        <td className="px-6 py-4">
+                          <Button variant="ghost" size="sm" className="text-orange-600 hover:bg-orange-50" onClick={() => handleShowTripRoute(row, idx)} disabled={loadingTripRoute === idx.toString()}>
+                            {loadingTripRoute === idx.toString() ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4 mr-1" />}
+                            Show Route
+                          </Button>
+                        </td></>)}
+                      {reportType === "stops" && (
+                        <>
+                          <td className="px-6 py-4">{new Date(row.startTime).toLocaleString()}</td>
+                          <td className="px-6 py-4">{new Date(row.endTime).toLocaleString()}</td>
+                          <td className="px-6 py-4">{formatDuration(row.duration)}</td>
+                          <td className="px-6 py-4 text-gray-500 truncate max-w-xs">
+                            {addressMap[idx] || row.address ? (
+                              <span className="text-gray-700">{addressMap[idx] || row.address}</span>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-orange-600 h-6 px-2 hover:bg-orange-50"
+                                onClick={() => handleShowAddress(row.latitude, row.longitude, idx)}
+                                disabled={loadingAddresses[idx]}
+                              >
+                                {loadingAddresses[idx] ? <Loader2 className="h-3 w-3 animate-spin" /> : "Show Address"}
+                              </Button>
+                            )}
+                          </td>
+                        </>
+                      )}
                       {reportType === "events" && (<><td className="px-6 py-4">{new Date(row.eventTime).toLocaleString()}</td><td className="px-6 py-4 font-medium capitalize">{row.type}</td><td className="px-6 py-4 text-gray-500">{row.geofenceId ? `Geofence ID: ${row.geofenceId}` : JSON.stringify(row.attributes)}</td></>)}
                       {reportType === "summary" && (<><td className="px-6 py-4 font-medium">{devices.find(d => d.id === row.deviceId)?.name || row.deviceId}</td><td className="px-6 py-4">{(row.distance / 1000).toFixed(2)} km</td><td className="px-6 py-4">{row.maxSpeed ? (row.maxSpeed * 1.852).toFixed(1) : "0"} km/h</td><td className="px-6 py-4">{row.engineHours ? formatDuration(row.engineHours) : "-"}</td></>)}
-                      {reportType === "route" && (<><td className="px-6 py-4">{new Date(row.fixTime).toLocaleString()}</td><td className="px-6 py-4 font-mono">{row.latitude?.toFixed(5) || "0"}</td><td className="px-6 py-4 font-mono">{row.longitude?.toFixed(5) || "0"}</td><td className="px-6 py-4">{row.speed ? (row.speed * 1.852).toFixed(1) : "0"} km/h</td><td className="px-6 py-4 truncate max-w-xs">{row.address || "-"}</td></>)}
+                      {reportType === "route" && (
+                        <>
+                          <td className="px-6 py-4">{new Date(row.fixTime).toLocaleString()}</td>
+                          <td className="px-6 py-4 font-mono">{row.latitude?.toFixed(5) || "0"}</td>
+                          <td className="px-6 py-4 font-mono">{row.longitude?.toFixed(5) || "0"}</td>
+                          <td className="px-6 py-4">{row.speed ? (row.speed * 1.852).toFixed(1) : "0"} km/h</td>
+                          <td className="px-6 py-4 truncate max-w-xs">
+                            {addressMap[idx] ? (
+                              <span className="text-gray-700">{addressMap[idx]}</span>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-orange-600 h-6 px-2 hover:bg-orange-50"
+                                onClick={() => handleShowAddress(row.latitude, row.longitude, idx)}
+                                disabled={loadingAddresses[idx]}
+                              >
+                                {loadingAddresses[idx] ? <Loader2 className="h-3 w-3 animate-spin" /> : "Show Address"}
+                              </Button>
+                            )}
+                          </td>
+                        </>
+                      )}
                     </tr>
                   ))}
                 </tbody>
