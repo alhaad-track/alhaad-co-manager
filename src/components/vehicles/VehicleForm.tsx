@@ -450,7 +450,7 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                             <span className="text-gray-500">Motion:</span>
                                             <span className="font-medium">{positionData.attributes?.motion ? "Yes" : "No"}</span>
                                             <span className="text-gray-500">Fix Time:</span>
-                                            <span className="font-medium col-span-1">{new Date(positionData.fixTime).toLocaleString()}</span>
+                                            <span className="font-medium col-span-1" suppressHydrationWarning>{new Date(positionData.fixTime).toLocaleString()}</span>
                                         </div>
                                     </div>
                                     <div className="col-span-1 md:col-span-2 mt-2">

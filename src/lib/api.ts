@@ -54,6 +54,14 @@ export async function getRoute(params: URLSearchParams) {
     return fetchJson<any[]>(`/api/reports/route?${params.toString()}`);
 }
 
+export async function getStops(params: URLSearchParams) {
+    return fetchJson<any[]>(`/api/reports/stops?${params.toString()}`);
+}
+
+export async function getSummary(params: URLSearchParams) {
+    return fetchJson<any[]>(`/api/reports/summary?${params.toString()}`);
+}
+
 export async function getPosition(id: string) {
     return fetchJson<any[]>(`/api/positions?id=${id}`);
 }
