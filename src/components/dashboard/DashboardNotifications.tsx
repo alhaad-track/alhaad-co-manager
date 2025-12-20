@@ -2,74 +2,94 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Bell, Key, Clock, MapPin, AlertCircle, PowerOff } from "lucide-react";
+import { Bell, Key, Clock, MapPin, AlertCircle, PowerOff, AlertTriangle } from "lucide-react";
 import { useState } from "react";
 
-export default function DashboardNotifications() {
+export default function DashboardNotifications({ events = [] }: { events?: any[] }) {
     const [filter, setFilter] = useState("all");
 
-    const notifications = [
+    // Categorize events exactly like Alerts Page
+    const categorizedEvents = events.map(event => {
+        let type = "other";
+        if (event.type === "geofenceEnter" || event.type === "deviceOnline") type = "entry";
+        else if (event.type === "geofenceExit") type = "exit";
+        else if (event.type === "deviceOverspeed" || (event.type === "alarm" && event.attributes?.alarm === "overspeed")) type = "speed";
+        else if (event.type === "deviceOffline") type = "warning";
+        return { ...event, category: type };
+    });
+
+    const stats = {
+        entry: categorizedEvents.filter(e => e.category === "entry").length,
+        exit: categorizedEvents.filter(e => e.category === "exit").length,
+        speed: categorizedEvents.filter(e => e.category === "speed").length,
+        warning: categorizedEvents.filter(e => e.category === "warning").length,
+        other: categorizedEvents.filter(e => e.category === "other").length
+    };
+
+    const notificationTypes = [
         {
-            id: 1,
-            type: "IGNITION ON",
-            count: 821,
-            icon: Key,
+            id: "entry",
+            label: "Entry / Online",
+            count: stats.entry,
+            icon: MapPin,
+            color: "text-green-600",
+            bg: "bg-green-100"
+        },
+        {
+            id: "exit",
+            label: "Exit",
+            count: stats.exit,
+            icon: MapPin,
+            color: "text-orange-600",
+            bg: "bg-orange-100"
+        },
+        {
+            id: "speed",
+            label: "Speeding",
+            count: stats.speed,
+            icon: AlertCircle,
+            color: "text-red-600",
+            bg: "bg-red-100"
+        },
+        {
+            id: "warning",
+            label: "Warnings / Offline",
+            count: stats.warning,
+            icon: AlertTriangle,
+            color: "text-yellow-600",
+            bg: "bg-yellow-100"
+        },
+        {
+            id: "other",
+            label: "Other Events",
+            count: stats.other,
+            icon: Bell,
             color: "text-gray-600",
-            date: "today"
-        },
-        {
-            id: 2,
-            type: "IDLING",
-            count: 330,
-            icon: Clock,
-            color: "text-orange-500",
-            date: "today"
-        },
-        {
-            id: 3,
-            type: "ENTERED ZONE",
-            count: 135,
-            icon: MapPin,
-            color: "text-blue-500",
-            date: "week"
-        },
-        {
-            id: 4,
-            type: "LEFT ZONE",
-            count: 135,
-            icon: MapPin,
-            color: "text-purple-500",
-            date: "week"
-        },
-        {
-            id: 5,
-            type: "DEVICE UNPLUGGED",
-            count: 2,
-            icon: PowerOff,
-            color: "text-red-500",
-            date: "month"
-        },
+            bg: "bg-gray-100"
+        }
     ];
 
-    const filteredNotifications = notifications.filter(item => {
+    const filteredNotifications = notificationTypes.filter(item => {
+        if (item.count === 0) return false;
         if (filter === "all") return true;
-        if (filter === "today") return item.date === "today";
-        if (filter === "week") return item.date === "today" || item.date === "week";
-        return true;
+        return item.id === filter;
     });
 
     return (
         <Card className="border-none shadow-sm bg-white h-full">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-gray-500">Total Notifications</CardTitle>
+                <CardTitle className="text-sm font-medium text-gray-500">System Notifications (Today)</CardTitle>
                 <Select defaultValue="all" onValueChange={setFilter}>
-                    <SelectTrigger className="w-[80px] h-7 text-xs">
-                        <SelectValue placeholder="All" />
+                    <SelectTrigger className="w-[110px] h-7 text-xs">
+                        <SelectValue placeholder="All types" />
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">All</SelectItem>
-                        <SelectItem value="today">Today</SelectItem>
-                        <SelectItem value="week">Week</SelectItem>
+                        <SelectItem value="entry">Entry</SelectItem>
+                        <SelectItem value="exit">Exit</SelectItem>
+                        <SelectItem value="speed">Speed</SelectItem>
+                        <SelectItem value="warning">Warning</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
                     </SelectContent>
                 </Select>
             </CardHeader>
@@ -78,11 +98,11 @@ export default function DashboardNotifications() {
                     {filteredNotifications.map((item) => (
                         <div key={item.id} className="flex items-center justify-between border-b border-gray-100 pb-3 last:border-0 last:pb-0">
                             <div className="flex items-center gap-3">
-                                <div className="p-2 bg-gray-50 rounded-full">
+                                <div className={`p-2 rounded-full ${item.bg}`}>
                                     <item.icon className={`w-4 h-4 ${item.color}`} />
                                 </div>
                                 <div>
-                                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{item.type}</p>
+                                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{item.label}</p>
                                     <p className="text-lg font-bold text-gray-800">{item.count}</p>
                                 </div>
                             </div>
@@ -90,7 +110,7 @@ export default function DashboardNotifications() {
                     ))}
                     {filteredNotifications.length === 0 && (
                         <div className="text-center text-xs text-gray-400 py-4">
-                            No notifications for this period.
+                            {filter === "all" ? "No events recorded today." : "No events of this type."}
                         </div>
                     )}
                 </div>
