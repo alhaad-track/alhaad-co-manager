@@ -97,29 +97,36 @@ function MapController({ route }: { route: any[] }) {
 }
 
 export default function TripMapComponent({ route, tripDetails, showAllMarkers = false }: TripMapComponentProps) {
-    if (!route || route.length === 0) return <div className="h-full flex items-center justify-center">No route data</div>;
+    // 1. Filter out invalid points to prevent crashes (Invalid LatLng object)
+    const validRoute = route?.filter(p =>
+        p.latitude !== undefined &&
+        p.longitude !== undefined &&
+        !isNaN(p.latitude) &&
+        !isNaN(p.longitude)
+    ) || [];
+
+    if (validRoute.length === 0) return <div className="h-full flex items-center justify-center text-gray-400">No valid route data</div>;
 
     // For stops, we might not have a "start" and "end" concept in the same way, or we just want to show all.
-    // If showAllMarkers is true, we skip special start/end logic and just map everything, or overly them.
-    // However, usually existing start/end logic is fine, we just want to ADD markers for the rest.
+    // However, we strictly rely on validRoute now.
 
-    const startPoint = route[0];
-    const endPoint = route[route.length - 1];
+    const startPoint = validRoute[0];
+    const endPoint = validRoute[validRoute.length - 1];
 
     // Optimize route segments for color (only if NOT in showAllMarkers mode purely, implies movement)
-    // If it's stops, we probably don't need speed colored lines, but keeping them doesn't hurt.
     const segments = [];
     if (!showAllMarkers) {
-        let currentSegment = [route[0]];
-        let currentColor = getSpeedColor(route[0].speed || 0);
+        let currentSegment = [validRoute[0]];
+        let currentColor = getSpeedColor(validRoute[0].speed || 0);
 
-        for (let i = 1; i < route.length; i++) {
-            const point = route[i];
+        for (let i = 1; i < validRoute.length; i++) {
+            const point = validRoute[i];
             const pointColor = getSpeedColor(point.speed || 0);
 
+            // Maintain continuity
             currentSegment.push(point);
 
-            if (pointColor !== currentColor || i === route.length - 1) {
+            if (pointColor !== currentColor || i === validRoute.length - 1) {
                 segments.push({
                     positions: currentSegment.map(p => [p.latitude, p.longitude] as [number, number]),
                     color: currentColor
@@ -153,16 +160,9 @@ export default function TripMapComponent({ route, tripDetails, showAllMarkers = 
                 </LayersControl.BaseLayer>
             </LayersControl>
 
-            <MapController route={route} />
+            <MapController route={validRoute} />
 
-            {/* Colored Speed Segments - Only hide if desired, but here we can keep or hide. 
-                For stops report, speed is usually 0, so it will be all one color. 
-                But stops usually imply discrete points, not a path. 
-                If showAllMarkers is true, let's skip the line to avoid clutter or misleading paths if the stops are not sequential in a path way.
-                Actually, stops ARE sequential. Let's keep the line if needed, or maybe make it optional. 
-                For now, let's keep the line logic ONLY if showAllMarkers is FALSE (i.e. Route mode). 
-                If Stops mode, we just want points.
-            */}
+            {/* Colored Speed Segments */}
             {!showAllMarkers && segments.map((seg, idx) => (
                 <Polyline
                     key={idx}
@@ -172,7 +172,7 @@ export default function TripMapComponent({ route, tripDetails, showAllMarkers = 
             ))}
 
             {/* If showAllMarkers is true, render a marker for EVERY point */}
-            {showAllMarkers && route.map((point, idx) => (
+            {showAllMarkers && validRoute.map((point, idx) => (
                 <Marker key={idx} position={[point.latitude, point.longitude]} icon={stopIcon}>
                     <Popup>
                         <div className="p-1 min-w-[200px]">
@@ -191,8 +191,8 @@ export default function TripMapComponent({ route, tripDetails, showAllMarkers = 
             {/* Standard Route Visualization (Arrows & Start/End) - Only if NOT showAllMarkers */}
             {!showAllMarkers && (
                 <>
-                    {route.map((point, idx) => {
-                        if (idx % 20 !== 0 || idx === 0 || idx === route.length - 1) return null;
+                    {validRoute.map((point, idx) => {
+                        if (idx % 20 !== 0 || idx === 0 || idx === validRoute.length - 1) return null;
                         const rotation = point.course || 0;
                         const arrowIcon = L.divIcon({
                             className: 'bg-transparent',
@@ -221,25 +221,29 @@ export default function TripMapComponent({ route, tripDetails, showAllMarkers = 
                         );
                     })}
 
-                    <Marker position={[startPoint.latitude, startPoint.longitude]} icon={startIcon}>
-                        <Popup>
-                            <div className="p-1">
-                                <strong className="block text-sm mb-1 text-green-700">Start Point</strong>
-                                <div className="text-xs text-gray-600 mb-1">{tripDetails?.startTime || startPoint.fixTime || "Time unknown"}</div>
-                                <div className="text-xs">{tripDetails?.startAddress || "Address not resolved"}</div>
-                            </div>
-                        </Popup>
-                    </Marker>
+                    {startPoint && (
+                        <Marker position={[startPoint.latitude, startPoint.longitude]} icon={startIcon}>
+                            <Popup>
+                                <div className="p-1">
+                                    <strong className="block text-sm mb-1 text-green-700">Start Point</strong>
+                                    <div className="text-xs text-gray-600 mb-1">{tripDetails?.startTime || startPoint.fixTime || "Time unknown"}</div>
+                                    <div className="text-xs">{tripDetails?.startAddress || "Address not resolved"}</div>
+                                </div>
+                            </Popup>
+                        </Marker>
+                    )}
 
-                    <Marker position={[endPoint.latitude, endPoint.longitude]} icon={endIcon}>
-                        <Popup>
-                            <div className="p-1">
-                                <strong className="block text-sm mb-1 text-red-700">End Point</strong>
-                                <div className="text-xs text-gray-600 mb-1">{tripDetails?.endTime || endPoint.fixTime || "Time unknown"}</div>
-                                <div className="text-xs">{tripDetails?.endAddress || "Address not resolved"}</div>
-                            </div>
-                        </Popup>
-                    </Marker>
+                    {endPoint && (
+                        <Marker position={[endPoint.latitude, endPoint.longitude]} icon={endIcon}>
+                            <Popup>
+                                <div className="p-1">
+                                    <strong className="block text-sm mb-1 text-red-700">End Point</strong>
+                                    <div className="text-xs text-gray-600 mb-1">{tripDetails?.endTime || endPoint.fixTime || "Time unknown"}</div>
+                                    <div className="text-xs">{tripDetails?.endAddress || "Address not resolved"}</div>
+                                </div>
+                            </Popup>
+                        </Marker>
+                    )}
                 </>
             )}
 
