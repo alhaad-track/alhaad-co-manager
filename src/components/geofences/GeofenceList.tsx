@@ -43,7 +43,7 @@ export default function GeofenceList({
                     </div>
                     <div className="flex items-center gap-1">
                         {selectedGeofenceIds.length > 0 && !isCollapsed && (
-                            <Button variant="ghost" size="sm" onClick={onClearSelection} className="text-xs text-blue-600 hover:text-blue-800 h-6 px-2">
+                            <Button variant="ghost" size="sm" onClick={onClearSelection} className="text-xs text-orange-600 hover:text-orange-800 h-6 px-2">
                                 Clear ({selectedGeofenceIds.length})
                             </Button>
                         )}
@@ -54,7 +54,7 @@ export default function GeofenceList({
                 </div>
                 {!isCollapsed && (
                     <div className="space-y-2">
-                        <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white" onClick={onAddZone}>
+                        <Button className="w-full bg-orange-600 hover:bg-orange-700 text-white" onClick={onAddZone}>
                             Add Zone
                         </Button>
                         <Input
@@ -73,16 +73,16 @@ export default function GeofenceList({
                         return (
                             <div
                                 key={geofence.id}
-                                className={`p-4 border-b hover:bg-gray-50 flex items-center justify-between group cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 border-l-4 border-l-blue-600' : ''}`}
+                                className={`p-4 border-b hover:bg-gray-50 flex items-center justify-between group cursor-pointer transition-colors ${isSelected ? 'bg-orange-50 border-l-4 border-l-orange-600' : ''}`}
                                 onClick={() => onToggleSelection(geofence.id)}
                             >
                                 <div className="flex items-center gap-3">
                                     <Checkbox
                                         checked={isSelected}
                                         onCheckedChange={() => onToggleSelection(geofence.id)}
-                                        className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                                        className="data-[state=checked]:bg-orange-600 data-[state=checked]:border-orange-600"
                                     />
-                                    <div className={`p-2 rounded-full text-gray-600 ${isSelected ? 'bg-blue-200 text-blue-700' : 'bg-gray-100'}`}>
+                                    <div className={`p-2 rounded-full text-gray-600 ${isSelected ? 'bg-orange-200 text-orange-700' : 'bg-gray-100'}`}>
                                         {geofence.type === 'circle' ? <Circle className="w-4 h-4" /> : <Hexagon className="w-4 h-4" />}
                                     </div>
                                     <div>

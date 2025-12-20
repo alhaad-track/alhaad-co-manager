@@ -39,6 +39,14 @@ export async function getDevices() {
     return fetchJson<any[]>("/api/devices");
 }
 
+export async function getDrivers() {
+    return fetchJson<any[]>("/api/drivers");
+}
+
+export async function getUsers() {
+    return fetchJson<any[]>("/api/users");
+}
+
 export async function getGeofences() {
     return fetchJson<any[]>("/api/geofences");
 }
