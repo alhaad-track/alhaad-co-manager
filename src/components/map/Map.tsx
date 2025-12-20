@@ -8,12 +8,15 @@ const MapComponent = dynamic(() => import("./MapComponent"), {
     loading: () => <div className="h-full w-full flex items-center justify-center bg-gray-100 text-gray-500">Loading Map...</div>
 });
 
+import { TripPoint } from "./MapComponent";
+
 interface MapProps {
     vehicles: Vehicle[];
     selectedVehicle?: Vehicle | null;
     onSelectVehicle?: (vehicle: Vehicle) => void;
+    livePath?: TripPoint[];
 }
 
-export default function Map({ vehicles, selectedVehicle, onSelectVehicle }: MapProps) {
-    return <MapComponent vehicles={vehicles} selectedVehicle={selectedVehicle} onSelectVehicle={onSelectVehicle} />;
+export default function Map({ vehicles, selectedVehicle, onSelectVehicle, livePath }: MapProps) {
+    return <MapComponent vehicles={vehicles} selectedVehicle={selectedVehicle} onSelectVehicle={onSelectVehicle} livePath={livePath} />;
 }
