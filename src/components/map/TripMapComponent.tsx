@@ -10,7 +10,11 @@ import { reverseGeocode } from "@/lib/api";
 const shadowUrl = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png";
 
 // Helper for speed color
-const getSpeedColor = (speed: number) => {
+// Helper for speed color
+const getSpeedColor = (speed: number, maxSpeed?: number) => {
+    // If speed exceeds device limit, show RED
+    if (maxSpeed && speed > maxSpeed) return '#ef4444';
+
     // Green Line: Stopped or moving very slowly (< 10)
     if (speed < 10) return '#22c55e';
     // Yellow Line: Medium speed (10 - 40)
@@ -80,6 +84,7 @@ interface TripMapComponentProps {
         endTime?: string;
     };
     showAllMarkers?: boolean;
+    maxSpeed?: number;
 }
 
 function MapController({ route }: { route: any[] }) {
@@ -96,7 +101,7 @@ function MapController({ route }: { route: any[] }) {
     return null;
 }
 
-export default function TripMapComponent({ route, tripDetails, showAllMarkers = false }: TripMapComponentProps) {
+export default function TripMapComponent({ route, tripDetails, showAllMarkers = false, maxSpeed }: TripMapComponentProps) {
     // 1. Filter out invalid points to prevent crashes (Invalid LatLng object)
     const validRoute = route?.filter(p =>
         p.latitude !== undefined &&
@@ -117,11 +122,11 @@ export default function TripMapComponent({ route, tripDetails, showAllMarkers = 
     const segments = [];
     if (!showAllMarkers) {
         let currentSegment = [validRoute[0]];
-        let currentColor = getSpeedColor(validRoute[0].speed || 0);
+        let currentColor = getSpeedColor(validRoute[0].speed || 0, maxSpeed);
 
         for (let i = 1; i < validRoute.length; i++) {
             const point = validRoute[i];
-            const pointColor = getSpeedColor(point.speed || 0);
+            const pointColor = getSpeedColor(point.speed || 0, maxSpeed);
 
             // Maintain continuity
             currentSegment.push(point);

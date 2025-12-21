@@ -411,6 +411,7 @@ export default function ReportGenerator() {
                 <div className="h-[400px] relative">
                   <TripMap
                     showAllMarkers={reportType === 'stops'}
+                    maxSpeed={devices.find(d => d.id.toString() === selectedDeviceId)?.attributes?.speedLimit}
                     route={reportType === 'trips' ? selectedTripRoute : reportData.map(p => ({
                       latitude: p.latitude,
                       longitude: p.longitude,

@@ -24,7 +24,11 @@ const customIcon = new L.Icon({
 });
 
 // Helper for speed color
-const getSpeedColor = (speed: number) => {
+// Helper for speed color
+const getSpeedColor = (speed: number, maxSpeed?: number) => {
+    // If speed exceeds device limit, show RED
+    if (maxSpeed && speed > maxSpeed) return '#ef4444';
+
     // Green Line: Stopped or moving very slowly (< 10)
     if (speed < 10) return '#22c55e';
     // Yellow Line: Medium speed (10 - 40)
@@ -120,11 +124,11 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
     const segments = [];
     if (livePath && livePath.length > 1) {
         let currentSegment = [livePath[0]];
-        let currentColor = getSpeedColor(livePath[0].speed || 0);
+        let currentColor = getSpeedColor(livePath[0].speed || 0, selectedVehicle?.maxSpeed);
 
         for (let i = 1; i < livePath.length; i++) {
             const point = livePath[i];
-            const pointColor = getSpeedColor(point.speed || 0);
+            const pointColor = getSpeedColor(point.speed || 0, selectedVehicle?.maxSpeed);
 
             // Add previous point to start of new segment for continuity
             // We just push current point to current segment

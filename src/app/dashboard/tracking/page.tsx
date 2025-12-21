@@ -60,7 +60,8 @@ export default function TrackingPage() {
                     icon: "truck",
                     positionId: device.positionId?.toString(),
                     speed: pos?.speed,
-                    course: pos?.course
+                    course: pos?.course,
+                    maxSpeed: device.attributes?.speedLimit
                 } as Vehicle;
             });
 
