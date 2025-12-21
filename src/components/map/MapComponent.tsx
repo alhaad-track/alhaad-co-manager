@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap, LayersControl, Polyline } from "react-leaflet";
+import { useEffect, useState } from "react";
+import { MapContainer, TileLayer, Marker, Popup, useMap, LayersControl, Polyline, CircleMarker } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
+import { reverseGeocode } from "@/lib/api";
 import { Vehicle, mockTripPaths } from "@/lib/data";
 import { Car, Truck, Bus, Bike, Box } from "lucide-react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -47,7 +48,6 @@ const startIcon = new L.Icon({
     shadowSize: [41, 41]
 });
 
-// Stop Icon (Red)
 const stopIcon = new L.Icon({
     iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png",
     shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
@@ -56,6 +56,28 @@ const stopIcon = new L.Icon({
     popupAnchor: [1, -34],
     shadowSize: [41, 41]
 });
+
+// Component to fetch and display address
+const AddressDisplay = ({ lat, lng }: { lat: number, lng: number }) => {
+    const [address, setAddress] = useState<string | undefined>(undefined);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        if (!address && !loading) {
+            setLoading(true);
+            reverseGeocode(lat, lng)
+                .then((addr) => setAddress(addr))
+                .catch((err) => {
+                    console.error("Geocoding failed", err);
+                    setAddress("Address lookup failed");
+                })
+                .finally(() => setLoading(false));
+        }
+    }, [lat, lng, address, loading]);
+
+    if (loading) return <span className="text-gray-400 italic">Resolving...</span>;
+    return <span>{address || "Unknown location"}</span>;
+};
 
 export interface TripPoint {
     latitude: number;
@@ -193,10 +215,14 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
                         />
                     ))}
 
-                    {/* Direction Arrows */}
+                    {/* Start Marker */}
+                    <Marker position={[livePath[0].latitude, livePath[0].longitude]} icon={startIcon}>
+                        <Popup>Start of History (1h ago)</Popup>
+                    </Marker>
+
+                    {/* Interactive Points (Green Arrows) */}
                     {livePath.map((point, idx) => {
-                        // Show arrow every 20 points, but ensure first and last aren't crowded if needed
-                        if (idx % 20 !== 0 || idx === 0 || idx === livePath.length - 1) return null;
+                        // Use "Same Green with White Arrow" style for each mark
                         const rotation = point.course || 0;
                         const arrowIcon = L.divIcon({
                             className: 'bg-transparent',
@@ -204,15 +230,32 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
                             iconSize: [24, 24],
                             iconAnchor: [12, 12]
                         });
+
                         return (
-                            <Marker key={`arrow-${idx}`} position={[point.latitude, point.longitude]} icon={arrowIcon} zIndexOffset={-100} />
+                            <Marker
+                                key={`point-${idx}`}
+                                position={[point.latitude, point.longitude]}
+                                icon={arrowIcon}
+                                zIndexOffset={-50}
+                            >
+                                <Popup>
+                                    <div className="p-1 min-w-[200px]">
+                                        <strong className="block text-sm mb-2 border-b pb-1">Trip Point Info</strong>
+                                        <div className="grid grid-cols-[60px_1fr] gap-1 text-xs">
+                                            <span className="text-gray-500 font-medium">Time:</span>
+                                            <span>{point.fixTime ? new Date(point.fixTime).toLocaleString() : "-"}</span>
+                                            <span className="text-gray-500 font-medium">Speed:</span>
+                                            <span>{point.speed ? `${(point.speed * 1.852).toFixed(1)} km/h` : "0 km/h"}</span>
+                                            <span className="text-gray-500 font-medium">Course:</span>
+                                            <span>{point.course}°</span>
+                                            <span className="text-gray-500 font-medium">Address:</span>
+                                            <AddressDisplay lat={point.latitude} lng={point.longitude} />
+                                        </div>
+                                    </div>
+                                </Popup>
+                            </Marker>
                         );
                     })}
-
-                    {/* Start Marker */}
-                    <Marker position={[livePath[0].latitude, livePath[0].longitude]} icon={startIcon}>
-                        <Popup>Start of History (1h ago)</Popup>
-                    </Marker>
                 </>
             )}
 
