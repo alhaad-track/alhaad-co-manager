@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap, LayersControl, Polyline, CircleMarker } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, useMap, LayersControl, Polyline, CircleMarker, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { reverseGeocode } from "@/lib/api";
@@ -108,6 +108,15 @@ function MapController({ selectedVehicle }: { selectedVehicle?: Vehicle | null }
     return null;
 }
 
+function ZoomHandler({ setZoom }: { setZoom: (z: number) => void }) {
+    const map = useMapEvents({
+        zoomend: () => {
+            setZoom(map.getZoom());
+        }
+    });
+    return null;
+}
+
 // Helper to create custom marker icon
 const createVehicleIcon = (type: string) => {
     if (type === "default" || !type) {
@@ -141,6 +150,7 @@ const createVehicleIcon = (type: string) => {
 
 export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicle, livePath }: MapComponentProps) {
     const selectedTrip = selectedVehicle ? mockTripPaths[selectedVehicle.id] : null;
+    const [zoom, setZoom] = useState(13); // Default zoom
 
     // Prepare segments for colored line if livePath exists
     const segments = [];
@@ -172,8 +182,21 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
     // Determine path for default display fallback
     const pathCoordinates = selectedTrip ? selectedTrip.path : [];
 
+    // Filter points based on zoom level
+    const getStep = (z: number) => {
+        if (z < 10) return 40;
+        if (z < 12) return 30;
+        if (z < 14) return 15;
+        if (z < 16) return 8;
+        return 1;
+    };
+
+    const step = getStep(zoom);
+    const visiblePoints = livePath ? livePath.filter((_, i) => i % step === 0 || i === livePath.length - 1) : [];
+
     return (
         <MapContainer center={[51.505, -0.09]} zoom={13} style={{ height: "100%", width: "100%" }}>
+            <ZoomHandler setZoom={setZoom} />
             <LayersControl position="topright">
                 <LayersControl.BaseLayer name="OpenStreetMap">
                     <TileLayer
@@ -221,7 +244,7 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
                     </Marker>
 
                     {/* Interactive Points (Green Arrows) */}
-                    {livePath.map((point, idx) => {
+                    {visiblePoints.map((point, idx) => {
                         // Use "Same Green with White Arrow" style for each mark
                         const rotation = point.course || 0;
                         const arrowIcon = L.divIcon({
