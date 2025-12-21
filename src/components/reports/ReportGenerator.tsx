@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { FileText, Download, Loader2, TrendingUp, Filter, AlertTriangle, MapPin, Navigation, Clock, Activity, StopCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { FileText, Download, Loader2, TrendingUp, Filter, AlertTriangle, MapPin, Navigation, Clock, Activity, StopCircle, ChevronDown, ChevronUp, Calendar } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line } from 'recharts';
@@ -139,6 +139,10 @@ export default function ReportGenerator() {
         case "trips": data = await getTrips(params); break;
         case "stops": data = await getStops(params); break;
         case "summary": data = await getSummary(params); break;
+        case "daily":
+          params.append("daily", "true");
+          data = await getSummary(params);
+          break;
         case "events": data = await getEvents(params); break;
         case "route": data = await getRoute(params); break;
         default: throw new Error("Unknown report type");
@@ -222,6 +226,17 @@ export default function ReportGenerator() {
         { label: "Max Speed", value: `${((row.maxSpeed || 0) * 1.852).toFixed(1)} km/h`, icon: TrendingUp, color: "text-red-600", bg: "bg-red-100" },
         { label: "Engine Hours", value: formatDuration(row.engineHours || 0), icon: Activity, color: "text-purple-600", bg: "bg-purple-100" }
       ];
+    } else if (reportType === "daily") {
+      const totalDist = reportData.reduce((acc, d) => acc + (d.distance || 0), 0);
+      const totalEngine = reportData.reduce((acc, d) => acc + (d.engineHours || 0), 0);
+      const avgDist = totalDist / (reportData.length || 1);
+
+      return [
+        { label: "Total Days", value: reportData.length, icon: Calendar, color: "text-blue-600", bg: "bg-blue-100" },
+        { label: "Total Distance", value: `${(totalDist / 1000).toFixed(2)} km`, icon: MapPin, color: "text-green-600", bg: "bg-green-100" },
+        { label: "Total Engine Hours", value: formatDuration(totalEngine), icon: Activity, color: "text-purple-600", bg: "bg-purple-100" },
+        { label: "Avg Daily Dist", value: `${(avgDist / 1000).toFixed(2)} km`, icon: TrendingUp, color: "text-orange-600", bg: "bg-orange-100" }
+      ];
     } else if (reportType === "route") {
       const avgSpeed = reportData.reduce((acc, p) => acc + (p.speed || 0), 0) / reportData.length;
       return [
@@ -253,7 +268,14 @@ export default function ReportGenerator() {
       // Pie Chart: Event Type Distribution
       const counts: Record<string, number> = {};
       reportData.forEach(e => counts[e.type] = (counts[e.type] || 0) + 1);
+      reportData.forEach(e => counts[e.type] = (counts[e.type] || 0) + 1);
       return Object.entries(counts).map(([name, value]) => ({ name, value }));
+    } else if (reportType === "daily") {
+      // Bar Chart: Distance per Day
+      return reportData.map(d => ({
+        name: new Date(d.startTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+        value: parseFloat((d.distance / 1000).toFixed(2))
+      }));
     } else if (reportType === "route") {
       // Line Chart: Speed over Time (Downsampled)
       return reportData.filter((_, i) => i % Math.max(1, Math.floor(reportData.length / 50)) === 0).map(p => ({
@@ -293,8 +315,17 @@ export default function ReportGenerator() {
         head = [['Time', 'Type', 'Geofence']];
         body = reportData.map(e => [new Date(e.eventTime).toLocaleString(), e.type, e.geofenceId ? `Geofence #${e.geofenceId}` : "-"]);
       } else if (reportType === "summary") {
-        head = [['Device', 'Distance (km)', 'Max Speed']];
-        body = reportData.map(s => [deviceName, (s.distance / 1000).toFixed(2), s.maxSpeed?.toFixed(1) || "0"]);
+        head = [['Device', 'Distance (km)', 'Max Speed', 'Engine Hours']];
+        body = reportData.map(s => [deviceName, (s.distance / 1000).toFixed(2), s.maxSpeed?.toFixed(1) || "0", formatDuration(s.engineHours || 0)]);
+      } else if (reportType === "daily") {
+        head = [['Date', 'Distance (km)', 'Max Speed', 'Engine Hours', 'Spent Fuel']];
+        body = reportData.map(d => [
+          new Date(d.startTime).toLocaleDateString(),
+          (d.distance / 1000).toFixed(2),
+          d.maxSpeed?.toFixed(1) || "0",
+          formatDuration(d.engineHours || 0),
+          d.spentFuel ? d.spentFuel.toFixed(2) : "-"
+        ]);
       } else if (reportType === "route") {
         head = [['Time', 'Lat', 'Lon', 'Speed', 'Address']];
         // For PDF, we just hyphen for async addresses to keep it synchronous and simple, or could pre-fetch
@@ -324,7 +355,7 @@ export default function ReportGenerator() {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
             <div className="space-y-2"><Label>Device</Label><Select value={selectedDeviceId} onValueChange={setSelectedDeviceId}><SelectTrigger><SelectValue placeholder="Select Device" /></SelectTrigger><SelectContent>{devices.map(d => (<SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>))}</SelectContent></Select></div>
-            <div className="space-y-2"><Label>Report Type</Label><Select value={reportType} onValueChange={setReportType}><SelectTrigger><SelectValue placeholder="Select Type" /></SelectTrigger><SelectContent><SelectItem value="trips">Trips</SelectItem><SelectItem value="stops">Stops</SelectItem><SelectItem value="summary">Summary</SelectItem><SelectItem value="events">Events</SelectItem><SelectItem value="route">Route (Raw Data)</SelectItem></SelectContent></Select></div>
+            <div className="space-y-2"><Label>Report Type</Label><Select value={reportType} onValueChange={setReportType}><SelectTrigger><SelectValue placeholder="Select Type" /></SelectTrigger><SelectContent><SelectItem value="trips">Trips</SelectItem><SelectItem value="stops">Stops</SelectItem><SelectItem value="summary">Summary</SelectItem><SelectItem value="daily">Daily Summary</SelectItem><SelectItem value="events">Events</SelectItem><SelectItem value="route">Route (Raw Data)</SelectItem></SelectContent></Select></div>
             <div className="space-y-2"><Label>Period</Label><Select value={period} onValueChange={setPeriod}><SelectTrigger><SelectValue placeholder="Select Period" /></SelectTrigger><SelectContent><SelectItem value="today">Today</SelectItem><SelectItem value="yesterday">Yesterday</SelectItem><SelectItem value="this_week">This Week</SelectItem><SelectItem value="7_days">Last 7 Days</SelectItem><SelectItem value="this_month">This Month</SelectItem><SelectItem value="custom">Custom Range</SelectItem></SelectContent></Select></div>
             <Button onClick={handleGenerate} disabled={loading} className="bg-orange-600 hover:bg-orange-700 text-white w-full">{loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Filter className="mr-2 h-4 w-4" />} Generate Report</Button>
           </div>
@@ -422,7 +453,7 @@ export default function ReportGenerator() {
                         <XAxis dataKey="name" />
                         <YAxis />
                         <Tooltip cursor={{ fill: 'transparent' }} />
-                        <Bar dataKey="value" fill="#ea580c" radius={[4, 4, 0, 0]} name={reportType === 'trips' ? 'Distance (km)' : 'Duration (min)'} />
+                        <Bar dataKey="value" fill="#ea580c" radius={[4, 4, 0, 0]} name={reportType === 'trips' || reportType === 'daily' ? 'Distance (km)' : 'Duration (min)'} />
                       </BarChart>
                     )}
                   </ResponsiveContainer>
@@ -441,6 +472,7 @@ export default function ReportGenerator() {
                     {reportType === "stops" && ["Start Time", "End Time", "Duration", "Address"].map(h => <th key={h} className="px-6 py-3 font-medium">{h}</th>)}
                     {reportType === "events" && ["Time", "Type", "Geofence / Attributes"].map(h => <th key={h} className="px-6 py-3 font-medium">{h}</th>)}
                     {reportType === "summary" && ["Device", "Distance", "Max Speed", "Engine Hours"].map(h => <th key={h} className="px-6 py-3 font-medium">{h}</th>)}
+                    {reportType === "daily" && ["Date", "Distance", "Max Speed", "Engine Hours", "Spent Fuel"].map(h => <th key={h} className="px-6 py-3 font-medium">{h}</th>)}
                     {reportType === "route" && ["Time", "Lat", "Lon", "Speed", "Address"].map(h => <th key={h} className="px-6 py-3 font-medium">{h}</th>)}
                   </tr>
                 </thead>
@@ -478,6 +510,7 @@ export default function ReportGenerator() {
                       )}
                       {reportType === "events" && (<><td className="px-6 py-4">{new Date(row.eventTime).toLocaleString()}</td><td className="px-6 py-4 font-medium capitalize">{row.type}</td><td className="px-6 py-4 text-gray-500">{row.geofenceId ? `Geofence ID: ${row.geofenceId}` : JSON.stringify(row.attributes)}</td></>)}
                       {reportType === "summary" && (<><td className="px-6 py-4 font-medium">{devices.find(d => d.id === row.deviceId)?.name || row.deviceId}</td><td className="px-6 py-4">{(row.distance / 1000).toFixed(2)} km</td><td className="px-6 py-4">{row.maxSpeed ? (row.maxSpeed * 1.852).toFixed(1) : "0"} km/h</td><td className="px-6 py-4">{row.engineHours ? formatDuration(row.engineHours) : "-"}</td></>)}
+                      {reportType === "daily" && (<><td className="px-6 py-4">{new Date(row.startTime).toLocaleDateString()}</td><td className="px-6 py-4">{(row.distance / 1000).toFixed(2)} km</td><td className="px-6 py-4">{row.maxSpeed ? (row.maxSpeed * 1.852).toFixed(1) : "0"} km/h</td><td className="px-6 py-4">{row.engineHours ? formatDuration(row.engineHours) : "-"}</td><td className="px-6 py-4">{row.spentFuel ? row.spentFuel.toFixed(2) : "-"}</td></>)}
                       {reportType === "route" && (
                         <>
                           <td className="px-6 py-4">{new Date(row.fixTime).toLocaleString()}</td>
