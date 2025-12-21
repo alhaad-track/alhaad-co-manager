@@ -234,7 +234,7 @@ export default function GeofencesPage() {
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsNameDialogOpen(false)}>Cancel</Button>
-                        <Button onClick={saveGeofence}>Save Geofence</Button>
+                        <Button onClick={saveGeofence} className="bg-orange-600 hover:bg-orange-700 text-white">Save Geofence</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

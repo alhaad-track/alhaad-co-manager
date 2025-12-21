@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,25 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
         assignedGeofenceIds: initialData?.assignedGeofenceIds || [],
         icon: initialData?.icon || "default"
     });
+
+    // Fetched Geofences State
+    const [availableGeofences, setAvailableGeofences] = useState<any[]>([]);
+
+    useEffect(() => {
+        const fetchGeofences = async () => {
+            try {
+                // Dynamically import to avoid circular dep issues if any, or just consistent with previous code style
+                const { getGeofences } = await import("@/lib/api");
+                const data = await getGeofences();
+                setAvailableGeofences(data);
+            } catch (err) {
+                console.error("Failed to fetch geofences", err);
+                // Fallback to initialGeofences if API fails
+                setAvailableGeofences(initialGeofences);
+            }
+        };
+        fetchGeofences();
+    }, []);
 
     const [accordionValue, setAccordionValue] = useState("details");
     const [trips, setTrips] = useState<any[]>([]); // Using any[] to match TripHistory props if we cast or map
@@ -348,7 +367,7 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                 <div className="space-y-3">
                                     <Label>Assigned Geofences</Label>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 border rounded-lg p-4 bg-gray-50/50">
-                                        {initialGeofences.map(geofence => (
+                                        {availableGeofences.map(geofence => (
                                             <div key={geofence.id} className="flex items-center space-x-2">
                                                 <Checkbox
                                                     id={`geofence-${geofence.id}`}
@@ -367,13 +386,13 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                                     htmlFor={`geofence-${geofence.id}`}
                                                     className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                                                 >
-                                                    {geofence.name} <span className="text-xs text-muted-foreground">({geofence.type})</span>
+                                                    {geofence.name} <span className="text-xs text-muted-foreground">{geofence.description ? `(${geofence.description})` : ""}</span>
                                                 </label>
                                             </div>
                                         ))}
-                                        {initialGeofences.length === 0 && (
+                                        {availableGeofences.length === 0 && (
                                             <p className="text-sm text-muted-foreground col-span-2 text-center py-2">
-                                                No geofences available. {!readOnly && <Link href="/dashboard/geofences" className="text-orange-600 hover:underline">Create one</Link>}
+                                                No geofences found. {!readOnly && <Link href="/dashboard/geofences" className="text-orange-600 hover:underline">Create one</Link>}
                                             </p>
                                         )}
                                     </div>

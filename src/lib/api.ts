@@ -1,4 +1,4 @@
-export const TRACCAR_BASE_URL = "http://144.21.50.12";
+export const TRACCAR_BASE_URL = "/api/proxy";
 
 export async function traccarApi(endpoint: string, options: RequestInit = {}) {
     const url = `${TRACCAR_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
@@ -16,7 +16,8 @@ export async function traccarApi(endpoint: string, options: RequestInit = {}) {
         }
     }
 
-    const newOptions = {
+    const newOptions: RequestInit = {
+        credentials: "include", // Required for cookies (JSESSIONID)
         ...options,
         headers,
     };
@@ -36,6 +37,14 @@ async function fetchJson<T>(endpoint: string, options?: RequestInit): Promise<T>
 
 export async function getDevices() {
     return fetchJson<any[]>("/api/devices");
+}
+
+export async function getDrivers() {
+    return fetchJson<any[]>("/api/drivers");
+}
+
+export async function getUsers() {
+    return fetchJson<any[]>("/api/users");
 }
 
 export async function getGeofences() {

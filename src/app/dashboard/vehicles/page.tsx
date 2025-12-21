@@ -92,7 +92,7 @@ export default function VehiclesPage() {
             <div className="flex items-center justify-between">
                 <h2 className="text-3xl font-bold tracking-tight">Vehicles</h2>
                 <Link href="/dashboard/vehicles/new">
-                    <Button className="gap-2">
+                    <Button className="gap-2 bg-orange-600 hover:bg-orange-700 text-white">
                         <Plus className="w-4 h-4" />
                         Add Vehicle
                     </Button>
@@ -139,7 +139,7 @@ export default function VehiclesPage() {
                                     </span>
                                     <div className="flex gap-2 ml-auto">
                                         <Link href={`/dashboard/vehicles/${vehicle.id}/view`}>
-                                            <Button size="sm" className="h-6 text-xs bg-indigo-600 hover:bg-indigo-700 text-white">View</Button>
+                                            <Button size="sm" className="h-6 text-xs bg-orange-600 hover:bg-orange-700 text-white">View</Button>
                                         </Link>
                                         <Link href={`/dashboard/vehicles/${vehicle.id}`}>
                                             <Button variant="outline" size="sm" className="h-6 text-xs">Edit</Button>

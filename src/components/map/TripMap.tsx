@@ -16,8 +16,9 @@ interface TripMapProps {
         endTime?: string;
     };
     showAllMarkers?: boolean;
+    maxSpeed?: number;
 }
 
-export default function TripMap({ route, tripDetails, showAllMarkers }: TripMapProps) {
-    return <TripMapComponent route={route} tripDetails={tripDetails} showAllMarkers={showAllMarkers} />;
+export default function TripMap({ route, tripDetails, showAllMarkers, maxSpeed }: TripMapProps) {
+    return <TripMapComponent route={route} tripDetails={tripDetails} showAllMarkers={showAllMarkers} maxSpeed={maxSpeed} />;
 }

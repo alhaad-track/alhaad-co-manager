@@ -20,6 +20,7 @@ export interface Vehicle {
     assignedGeofenceIds?: string[];
     icon: "truck" | "car" | "van" | "bus" | "motorcycle" | "default";
     positionId?: string;
+    maxSpeed?: number;
 }
 
 export interface Geofence {

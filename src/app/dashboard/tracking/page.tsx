@@ -10,75 +10,193 @@ import Draggable from "react-draggable";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { List } from "lucide-react";
-import { traccarApi } from "@/lib/api";
+import { traccarApi, getRoute } from "@/lib/api";
+import { useTraccarSocket, SocketData, TraccarPosition, TraccarDevice } from "@/hooks/useTraccarSocket";
+
+// Interface for rich path data
+export interface TripPoint {
+    latitude: number;
+    longitude: number;
+    speed?: number;
+    course?: number;
+    fixTime?: string;
+}
 
 export default function TrackingPage() {
     const [vehicles, setVehicles] = useState<Vehicle[]>([]);
     const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+    const [vehiclePaths, setVehiclePaths] = useState<Record<string, TripPoint[]>>({});
     const nodeRef = useRef(null);
     const [isMobileListOpen, setIsMobileListOpen] = useState(false);
 
-    // Initial Fetch and Polling
-    useEffect(() => {
-        const fetchTrackingData = async () => {
-            try {
-                // 1. Fetch all devices
-                const devicesRes = await traccarApi("/api/devices");
-                if (!devicesRes.ok) return; // Silent fail on error for now, or handle UI error
-                const devices = await devicesRes.json();
+    // Initial Fetch (No polling)
+    const fetchTrackingData = async () => {
+        try {
+            // 1. Fetch all devices
+            const devicesRes = await traccarApi("/api/devices");
+            if (!devicesRes.ok) return;
+            const devices = await devicesRes.json();
 
-                // 2. Fetch all latest positions
-                const positionsRes = await traccarApi("/api/positions");
-                let positions: any[] = [];
-                if (positionsRes.ok) {
-                    positions = await positionsRes.json();
+            // 2. Fetch all latest positions
+            const positionsRes = await traccarApi("/api/positions");
+            let positions: any[] = [];
+            if (positionsRes.ok) {
+                positions = await positionsRes.json();
+            }
+
+            // 3. Map Data
+            const updatedVehicles: Vehicle[] = devices.map((device: any) => {
+                const pos = positions.find((p: any) => p.deviceId === device.id);
+                return {
+                    id: device.id.toString(),
+                    name: device.name,
+                    model: device.model || "Unknown Model",
+                    imei: device.uniqueId,
+                    userId: device.attributes?.userId?.toString(),
+                    status: (device.status === "online" || device.status === "moving" || device.status === "offline") ? device.status : "offline",
+                    lastUpdate: pos ? new Date(pos.fixTime).toLocaleString() : new Date(device.lastUpdate).toLocaleString(),
+                    lat: pos ? pos.latitude : 0,
+                    lng: pos ? pos.longitude : 0,
+                    icon: "truck",
+                    positionId: device.positionId?.toString(),
+                    speed: pos?.speed,
+                    course: pos?.course,
+                    maxSpeed: device.attributes?.speedLimit
+                } as Vehicle;
+            });
+
+            setVehicles(updatedVehicles);
+
+            // Update selected vehicle if it exists
+            if (selectedVehicle) {
+                const updatedSelected = updatedVehicles.find(v => v.id === selectedVehicle.id);
+                if (updatedSelected) {
+                    setSelectedVehicle(updatedSelected);
                 }
+            }
 
-                // 3. Map Data
-                const updatedVehicles: Vehicle[] = devices.map((device: any) => {
-                    // Find position for this device
-                    const pos = positions.find((p: any) => p.deviceId === device.id);
+        } catch (error) {
+            console.error("Error fetching tracking data:", error);
+        }
+    };
 
-                    return {
-                        id: device.id.toString(),
-                        name: device.name,
-                        model: device.model || "Unknown Model",
-                        imei: device.uniqueId,
-                        userId: device.attributes?.userId?.toString(),
-                        status: device.status,
-                        lastUpdate: pos ? new Date(pos.fixTime).toLocaleString() : new Date(device.lastUpdate).toLocaleString(),
-                        lat: pos ? pos.latitude : 0,
-                        lng: pos ? pos.longitude : 0,
-                        icon: "truck", // Could map from device category if available
-                        positionId: device.positionId?.toString(),
-                        speed: pos?.speed, // Optional, if Vehicle interface supports it
-                        course: pos?.course
-                    };
+    useEffect(() => {
+        // Initial call
+        fetchTrackingData();
+    }, []); // Only run once on mount
+
+    // Fetch history when vehicle is selected
+    useEffect(() => {
+        if (!selectedVehicle?.id) return;
+
+        const loadHistory = async () => {
+            try {
+                const to = new Date();
+                const from = new Date(to.getTime() - 60 * 60 * 1000); // 1 hour ago
+                const params = new URLSearchParams({
+                    deviceId: selectedVehicle.id,
+                    from: from.toISOString(),
+                    to: to.toISOString()
                 });
 
-                setVehicles(updatedVehicles);
+                const route = await getRoute(params);
+                if (route && Array.isArray(route)) {
+                    // Map to TripPoint
+                    const historyPath: TripPoint[] = route.map((p: any) => ({
+                        latitude: p.latitude,
+                        longitude: p.longitude,
+                        speed: p.speed,
+                        course: p.course,
+                        fixTime: p.fixTime
+                    }));
 
-                // Update selected vehicle if it exists
+                    setVehiclePaths(prev => {
+                        return {
+                            ...prev,
+                            [selectedVehicle.id]: historyPath
+                        };
+                    });
+                }
+            } catch (e) {
+                console.error("Failed to load history", e);
+            }
+        };
+
+        loadHistory();
+    }, [selectedVehicle?.id]);
+
+    // WebSocket Integration
+    useTraccarSocket((data: SocketData) => {
+        if (data.positions) {
+            // Update Paths
+            setVehiclePaths(prev => {
+                const nextPaths = { ...prev };
+                data.positions!.forEach(pos => {
+                    const id = pos.deviceId.toString();
+                    if (!nextPaths[id]) nextPaths[id] = [];
+
+                    // Add new point if it's different from the last one (simple dedup)
+                    const lastPoint = nextPaths[id][nextPaths[id].length - 1];
+                    if (!lastPoint || lastPoint.latitude !== pos.latitude || lastPoint.longitude !== pos.longitude) {
+                        nextPaths[id] = [...nextPaths[id], {
+                            latitude: pos.latitude,
+                            longitude: pos.longitude,
+                            speed: pos.speed,
+                            course: pos.course,
+                            fixTime: pos.fixTime
+                        }];
+                    }
+                });
+                return nextPaths;
+            });
+
+            // Update Vehicles
+            setVehicles(prev => {
+                const next = prev.map(v => {
+                    const update = data.positions!.find((p: TraccarPosition) => p.deviceId.toString() === v.id);
+                    if (update) {
+                        return {
+                            ...v,
+                            lat: update.latitude,
+                            lng: update.longitude,
+                            speed: update.speed,
+                            course: update.course,
+                            lastUpdate: new Date(update.fixTime).toLocaleString(),
+                            status: (update.speed > 0 ? "moving" : "online") as "moving" | "online" | "offline"
+                        };
+                    }
+                    return v;
+                });
+
+                // Keep selected vehicle in sync
                 if (selectedVehicle) {
-                    const updatedSelected = updatedVehicles.find(v => v.id === selectedVehicle.id);
-                    if (updatedSelected) {
+                    const updatedSelected = next.find(v => v.id === selectedVehicle.id);
+                    if (updatedSelected && (updatedSelected.lat !== selectedVehicle.lat || updatedSelected.lng !== selectedVehicle.lng)) {
                         setSelectedVehicle(updatedSelected);
                     }
                 }
 
-            } catch (error) {
-                console.error("Error fetching tracking data:", error);
-            }
-        };
+                return next;
+            });
+        }
 
-        // Initial call
-        fetchTrackingData();
-
-        // Polling interval (e.g., every 5 seconds)
-        const interval = setInterval(fetchTrackingData, 5000);
-
-        return () => clearInterval(interval);
-    }, [selectedVehicle?.id]); // Depend on ID to allow inner update logic to check it
+        if (data.devices) {
+            setVehicles(prev => {
+                return prev.map(v => {
+                    const update = data.devices!.find((d: TraccarDevice) => d.id.toString() === v.id);
+                    if (update) {
+                        return {
+                            ...v,
+                            name: update.name,
+                            status: (update.status === "online" || update.status === "moving" || update.status === "offline") ? update.status : "offline",
+                            lastUpdate: new Date(update.lastUpdate).toLocaleString()
+                        };
+                    }
+                    return v;
+                });
+            });
+        }
+    });
 
     const handleSelectVehicle = (vehicle: Vehicle) => {
         setSelectedVehicle(vehicle);
@@ -94,7 +212,12 @@ export default function TrackingPage() {
             <div className="flex-1 relative overflow-hidden rounded-xl border border-gray-200 shadow-sm">
                 {/* Map */}
                 <div className="absolute inset-0 z-0">
-                    <Map vehicles={vehicles} selectedVehicle={selectedVehicle} onSelectVehicle={handleSelectVehicle} />
+                    <Map
+                        vehicles={vehicles}
+                        selectedVehicle={selectedVehicle}
+                        onSelectVehicle={handleSelectVehicle}
+                        livePath={selectedVehicle ? vehiclePaths[selectedVehicle.id] : undefined}
+                    />
                 </div>
 
                 {/* Mobile Vehicle List Trigger */}
