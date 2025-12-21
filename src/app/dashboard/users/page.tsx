@@ -25,7 +25,7 @@ export default function UsersPage() {
                     id: u.id.toString(),
                     name: u.name || "Unknown",
                     email: u.email || "No Email",
-                    role: u.administrator ? "admin" : "user",
+                    role: u.administrator ? "manager" : "user",
                     createdAt: u.attributes?.createdAt || "N/A" // Traccar might not send creation date by default
                 }));
                 setUsers(mappedUsers);
@@ -106,7 +106,7 @@ export default function UsersPage() {
                                         <td className="p-4 align-middle font-medium">{user.name}</td>
                                         <td className="p-4 align-middle">{user.email}</td>
                                         <td className="p-4 align-middle capitalize">
-                                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${user.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'}`}>
+                                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${user.role === 'manager' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'}`}>
                                                 {user.role}
                                             </span>
                                         </td>

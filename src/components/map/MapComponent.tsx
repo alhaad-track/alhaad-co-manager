@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap, LayersControl, Polyline, CircleMarker, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
@@ -148,6 +148,70 @@ const createVehicleIcon = (type: string) => {
     });
 };
 
+// Smoothly moving marker
+const MovingMarker = ({ position, icon, children, onSelect }: { position: [number, number], icon: L.DivIcon, children: React.ReactNode, onSelect?: () => void }) => {
+    const markerRef = useRef<L.Marker>(null);
+    const [prevPos, setPrevPos] = useState(position);
+    const requestRef = useRef<number | null>(null);
+    const startTimeRef = useRef<number | null>(null);
+    const duration = 1000; // 1 second animation
+
+    useEffect(() => {
+        // If position unchanged, do nothing
+        if (position[0] === prevPos[0] && position[1] === prevPos[1]) return;
+
+        const animate = (time: number) => {
+            if (startTimeRef.current === null) startTimeRef.current = time;
+            const progress = (time - startTimeRef.current) / duration;
+
+            if (progress < 1) {
+                const lat = prevPos[0] + (position[0] - prevPos[0]) * progress;
+                const lng = prevPos[1] + (position[1] - prevPos[1]) * progress;
+
+                if (markerRef.current) {
+                    markerRef.current.setLatLng([lat, lng]);
+                }
+                requestRef.current = requestAnimationFrame(animate);
+            } else {
+                if (markerRef.current) {
+                    markerRef.current.setLatLng(position);
+                }
+                setPrevPos(position); // Update previous position to current target
+                startTimeRef.current = null; // Reset for next animation
+            }
+        };
+
+        requestRef.current = requestAnimationFrame(animate);
+
+        return () => {
+            if (requestRef.current) cancelAnimationFrame(requestRef.current);
+            startTimeRef.current = null;
+        };
+    }, [position, prevPos]);
+
+    // Update icon if it changes
+    useEffect(() => {
+        if (markerRef.current) {
+            markerRef.current.setIcon(icon);
+        }
+    }, [icon]);
+
+    return (
+        <Marker
+            ref={markerRef}
+            position={prevPos} // Initialize with prevPos (start of animation)
+            icon={icon}
+            eventHandlers={{
+                click: () => {
+                    if (onSelect) onSelect();
+                }
+            }}
+        >
+            {children}
+        </Marker>
+    );
+};
+
 export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicle, livePath }: MapComponentProps) {
     const selectedTrip = selectedVehicle ? mockTripPaths[selectedVehicle.id] : null;
     const [zoom, setZoom] = useState(13); // Default zoom
@@ -192,6 +256,7 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
     };
 
     const step = getStep(zoom);
+    // If we have livePath, ensure the very last point is always included so the connection to the vehicle is clear
     const visiblePoints = livePath ? livePath.filter((_, i) => i % step === 0 || i === livePath.length - 1) : [];
 
     return (
@@ -292,11 +357,6 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
                         opacity={0.7}
                         dashArray="10, 10"
                     />
-                    {/* Temporarily removed PolylineDecorator as it's not compatible with simple array structure if we wanted uniformity, 
-                        but standard polyline is fine for fallback. 
-                        Actually I'll leave it out to simplify imports/dependencies if not strictly needed for fallback.
-                        The user asked for Live Map to match Trip Map.
-                     */}
                     {selectedTrip.stops.map((stop, idx) => (
                         <Marker key={`stop-${idx}`} position={[stop.lat, stop.lng]} icon={stopIcon}>
                             <Popup>
@@ -311,18 +371,16 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
                 </>
             )}
 
-            {/* Render Vehicles */}
+            {/* Render Vehicles with Smooth Motion */}
             {vehicles.map((vehicle) => (
-                <Marker
+                <MovingMarker
                     key={vehicle.id}
                     position={[vehicle.lat, vehicle.lng]}
                     icon={createVehicleIcon(vehicle.icon || "car")}
-                    eventHandlers={{
-                        click: () => {
-                            if (onSelectVehicle) {
-                                onSelectVehicle(vehicle);
-                            }
-                        },
+                    onSelect={() => {
+                        if (onSelectVehicle) {
+                            onSelectVehicle(vehicle);
+                        }
                     }}
                 >
                     <Popup>
@@ -336,7 +394,7 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
                             )}
                         </div>
                     </Popup>
-                </Marker>
+                </MovingMarker>
             ))}
         </MapContainer>
     );
