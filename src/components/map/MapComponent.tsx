@@ -151,33 +151,55 @@ const createVehicleIcon = (type: string) => {
 // Smoothly moving marker
 const MovingMarker = ({ position, icon, children, onSelect }: { position: [number, number], icon: L.DivIcon, children: React.ReactNode, onSelect?: () => void }) => {
     const markerRef = useRef<L.Marker>(null);
-    const [prevPos, setPrevPos] = useState(position);
+    // We only pass the initial position to the Marker component to prevent React Leaflet from forcing updates.
+    // We handle all position updates manually via setLatLng for animation.
+    const [initialPos] = useState(position);
+
     const requestRef = useRef<number | null>(null);
     const startTimeRef = useRef<number | null>(null);
-    const duration = 1000; // 1 second animation
+    const duration = 4000; // 4 seconds animation (Smooth motion)
 
     useEffect(() => {
-        // If position unchanged, do nothing
-        if (position[0] === prevPos[0] && position[1] === prevPos[1]) return;
+        const marker = markerRef.current;
+        if (!marker) return;
+
+        // Cancel previous animation
+        if (requestRef.current) {
+            cancelAnimationFrame(requestRef.current);
+        }
+
+        // Get current visual position to start animation from
+        // This prevents jumping back if an update arrives mid-animation
+        const currentLatLng = marker.getLatLng();
+        const startLat = currentLatLng.lat;
+        const startLng = currentLatLng.lng;
+
+        // Target (new position)
+        const targetLat = position[0];
+        const targetLng = position[1];
+
+        // If practically same, skip
+        if (Math.abs(startLat - targetLat) < 0.000001 && Math.abs(startLng - targetLng) < 0.000001) {
+            return;
+        }
+
+        startTimeRef.current = null;
 
         const animate = (time: number) => {
             if (startTimeRef.current === null) startTimeRef.current = time;
-            const progress = (time - startTimeRef.current) / duration;
+            const elapsed = time - startTimeRef.current;
+            const progress = Math.min(elapsed / duration, 1);
+
+            // Linear interpolation
+            const lat = startLat + (targetLat - startLat) * progress;
+            const lng = startLng + (targetLng - startLng) * progress;
+
+            marker.setLatLng([lat, lng]);
 
             if (progress < 1) {
-                const lat = prevPos[0] + (position[0] - prevPos[0]) * progress;
-                const lng = prevPos[1] + (position[1] - prevPos[1]) * progress;
-
-                if (markerRef.current) {
-                    markerRef.current.setLatLng([lat, lng]);
-                }
                 requestRef.current = requestAnimationFrame(animate);
             } else {
-                if (markerRef.current) {
-                    markerRef.current.setLatLng(position);
-                }
-                setPrevPos(position); // Update previous position to current target
-                startTimeRef.current = null; // Reset for next animation
+                startTimeRef.current = null;
             }
         };
 
@@ -185,9 +207,8 @@ const MovingMarker = ({ position, icon, children, onSelect }: { position: [numbe
 
         return () => {
             if (requestRef.current) cancelAnimationFrame(requestRef.current);
-            startTimeRef.current = null;
         };
-    }, [position, prevPos]);
+    }, [position[0], position[1]]); // Trigger only when coordinates change
 
     // Update icon if it changes
     useEffect(() => {
@@ -199,7 +220,7 @@ const MovingMarker = ({ position, icon, children, onSelect }: { position: [numbe
     return (
         <Marker
             ref={markerRef}
-            position={prevPos} // Initialize with prevPos (start of animation)
+            position={initialPos} // Static initial position
             icon={icon}
             eventHandlers={{
                 click: () => {
