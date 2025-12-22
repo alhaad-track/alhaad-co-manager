@@ -120,7 +120,7 @@ function ZoomHandler({ setZoom }: { setZoom: (z: number) => void }) {
 // Helper to create custom marker icon
 const createVehicleIcon = (type: string, category?: string) => {
     // Use category if available, otherwise fallback to icon (legacy) or default
-    const iconType = (category || type || "default").toLowerCase();
+    const iconType = (category || type || "default").toLowerCase().trim();
 
     let IconComponent = Truck; // Default fallback
 
@@ -129,13 +129,11 @@ const createVehicleIcon = (type: string, category?: string) => {
         case "pickup": IconComponent = Car; break;
 
         case "truck":
-        case "camper":
-        case "crane":
-        case "offroad":
-        case "tractor": IconComponent = Tractor; break; // Or specific tractor icon if imported, defaulting truck/tractor for heavy
+        case "lorry": IconComponent = Truck; break;
 
+        case "camper":
         case "van":
-        case "ambulance": IconComponent = Box; break; // Box often represents delivery/van
+        case "ambulance": IconComponent = Box; break;
 
         case "bus":
         case "minibus":
@@ -143,6 +141,7 @@ const createVehicleIcon = (type: string, category?: string) => {
         case "tram": IconComponent = Bus; break;
 
         case "motorcycle":
+        case "motorbike":
         case "scooter":
         case "bicycle": IconComponent = Bike; break;
 
@@ -152,11 +151,15 @@ const createVehicleIcon = (type: string, category?: string) => {
         case "plane":
         case "helicopter": IconComponent = Plane; break;
 
+        case "tractor":
+        case "crane":
+        case "offroad": IconComponent = Tractor; break;
+
         case "person": IconComponent = User; break;
 
         case "animal": IconComponent = Leaf; break;
 
-        case "train": IconComponent = Truck; break; // No train icon in standard import yet, fallback
+        case "train": IconComponent = Truck; break;
 
         default: IconComponent = Truck;
     }
