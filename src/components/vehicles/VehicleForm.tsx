@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -470,14 +470,28 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                             <span className="font-medium">{positionData.attributes?.motion ? "Yes" : "No"}</span>
                                             <span className="text-gray-500">Fix Time:</span>
                                             <span className="font-medium col-span-1" suppressHydrationWarning>{new Date(positionData.fixTime).toLocaleString()}</span>
+
+                                            {/* Dynamic Attributes */}
+                                            {positionData.attributes && Object.entries(positionData.attributes).map(([key, value]) => {
+                                                if (["ignition", "batteryLevel", "motion", "door", "fuel", "odometer", "totalDistance", "hours"].includes(key)) return null;
+
+                                                const formatKey = (k: string) => k.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+
+                                                let displayValue: any = value;
+                                                if (typeof value === 'boolean') displayValue = value ? "Yes" : "No";
+                                                if (typeof value === 'object') displayValue = JSON.stringify(value);
+                                                if (value === null || value === undefined) return null;
+
+                                                return (
+                                                    <Fragment key={key}>
+                                                        <span className="text-gray-500">{formatKey(key)}:</span>
+                                                        <span className="font-medium break-all">{displayValue}</span>
+                                                    </Fragment>
+                                                );
+                                            })}
                                         </div>
                                     </div>
-                                    <div className="col-span-1 md:col-span-2 mt-2">
-                                        <h4 className="font-medium text-gray-500 uppercase text-xs tracking-wider mb-2">Raw Attributes</h4>
-                                        <div className="bg-gray-50 p-2 rounded text-xs font-mono break-all text-gray-700 border">
-                                            {JSON.stringify(positionData.attributes, null, 2)}
-                                        </div>
-                                    </div>
+
                                 </div>
                             </AccordionContent>
                         </AccordionItem>
