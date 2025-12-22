@@ -356,10 +356,22 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
                         />
                     ))}
 
-                    {/* Start Marker */}
-                    <Marker position={[livePath[0].latitude, livePath[0].longitude]} icon={startIcon}>
-                        <Popup>Start of History (1h ago)</Popup>
-                    </Marker>
+                    {/* Start Marker - Only show if current position is significantly different (> 50m) from start */
+                        (() => {
+                            const startPoint = livePath[0];
+                            const currentLat = selectedVehicle.lat;
+                            const currentLng = selectedVehicle.lng;
+                            const dist = Math.sqrt(Math.pow(startPoint.latitude - currentLat, 2) + Math.pow(startPoint.longitude - currentLng, 2));
+                            // Approx 0.0005 degrees is roughly 50m
+                            if (dist > 0.0005) {
+                                return (
+                                    <Marker position={[startPoint.latitude, startPoint.longitude]} icon={startIcon}>
+                                        <Popup>Start of History (1h ago)</Popup>
+                                    </Marker>
+                                );
+                            }
+                            return null;
+                        })()}
 
                     {/* Interactive Points (Green Arrows) */}
                     {visiblePoints.map((point, idx) => {
