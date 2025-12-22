@@ -18,6 +18,7 @@ export async function traccarApi(endpoint: string, options: RequestInit = {}) {
 
     const newOptions: RequestInit = {
         credentials: "include", // Required for cookies (JSESSIONID)
+        cache: "no-store", // Ensure fresh data
         ...options,
         headers,
     };
