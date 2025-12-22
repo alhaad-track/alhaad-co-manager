@@ -364,105 +364,78 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                         <AccordionContent>
                             <form onSubmit={handleSubmit} className="space-y-6 pt-2">
                                 {/* ... form content ... */}
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="name">Vehicle Name</Label>
-                                        <Input
-                                            id="name"
-                                            value={formData.name}
-                                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                            required
-                                            placeholder="Truck 001"
-                                            disabled={readOnly}
-                                        />
+                                {/* Group 1: Identity & Status */}
+                                <div className="space-y-4 border rounded-lg p-4 bg-gray-50/50">
+                                    <h3 className="font-semibold text-gray-700 flex items-center gap-2">
+                                        <Truck className="w-4 h-4" /> Vehicle Identity
+                                    </h3>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="name">Vehicle Name</Label>
+                                            <Input
+                                                id="name"
+                                                value={formData.name}
+                                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                                required
+                                                placeholder="Truck 001"
+                                                disabled={readOnly}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="model">Model</Label>
+                                            <Input
+                                                id="model"
+                                                value={formData.model}
+                                                onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+                                                required
+                                                placeholder="Volvo FH16"
+                                                disabled={readOnly}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="category">Category</Label>
+                                            <Select
+                                                value={formData.category || "default"}
+                                                onValueChange={(value) => setFormData({ ...formData, category: value })}
+                                                disabled={readOnly}
+                                            >
+                                                <SelectTrigger id="category">
+                                                    <SelectValue placeholder="Select Category" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="default"><span className="flex items-center gap-2"><Truck className="w-4 h-4" /> Default</span></SelectItem>
+                                                    <SelectItem value="car"><span className="flex items-center gap-2"><Car className="w-4 h-4" /> Car</span></SelectItem>
+                                                    <SelectItem value="truck"><span className="flex items-center gap-2"><Truck className="w-4 h-4" /> Truck</span></SelectItem>
+                                                    <SelectItem value="motorcycle"><span className="flex items-center gap-2"><Bike className="w-4 h-4" /> Motorcycle</span></SelectItem>
+                                                    <SelectItem value="bus"><span className="flex items-center gap-2"><Bus className="w-4 h-4" /> Bus</span></SelectItem>
+                                                    <SelectItem value="van"><span className="flex items-center gap-2"><Truck className="w-4 h-4" /> Van</span></SelectItem>
+                                                    <SelectItem value="pickup"><span className="flex items-center gap-2"><Car className="w-4 h-4" /> Pickup</span></SelectItem>
+                                                    <SelectItem value="tractor"><span className="flex items-center gap-2"><Tractor className="w-4 h-4" /> Tractor</span></SelectItem>
+                                                    <SelectItem value="animal"><span className="flex items-center gap-2"><Leaf className="w-4 h-4" /> Animal</span></SelectItem>
+                                                    <SelectItem value="bicycle"><span className="flex items-center gap-2"><Bike className="w-4 h-4" /> Bicycle</span></SelectItem>
+                                                    <SelectItem value="boat"><span className="flex items-center gap-2"><Anchor className="w-4 h-4" /> Boat</span></SelectItem>
+                                                    <SelectItem value="crane"><span className="flex items-center gap-2"><Truck className="w-4 h-4" /> Crane</span></SelectItem>
+                                                    <SelectItem value="helicopter"><span className="flex items-center gap-2"><Plane className="w-4 h-4" /> Helicopter</span></SelectItem>
+                                                    <SelectItem value="offroad"><span className="flex items-center gap-2"><Truck className="w-4 h-4" /> Offroad</span></SelectItem>
+                                                    <SelectItem value="person"><span className="flex items-center gap-2"><User className="w-4 h-4" /> Person</span></SelectItem>
+                                                    <SelectItem value="plane"><span className="flex items-center gap-2"><Plane className="w-4 h-4" /> Plane</span></SelectItem>
+                                                    <SelectItem value="ship"><span className="flex items-center gap-2"><Anchor className="w-4 h-4" /> Ship</span></SelectItem>
+                                                    <SelectItem value="train"><span className="flex items-center gap-2"><Truck className="w-4 h-4" /> Train</span></SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="expiration">Expiration Date (Account Validity)</Label>
+                                            <Input
+                                                id="expiration"
+                                                type="date"
+                                                value={expirationDate}
+                                                onChange={(e) => setExpirationDate(e.target.value)}
+                                                disabled={readOnly}
+                                            />
+                                        </div>
                                     </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="model">Model</Label>
-                                        <Input
-                                            id="model"
-                                            value={formData.model}
-                                            onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                                            required
-                                            placeholder="Volvo FH16"
-                                            disabled={readOnly}
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="category">Category</Label>
-                                        <Select
-                                            value={formData.category || "default"}
-                                            onValueChange={(value) => setFormData({ ...formData, category: value })}
-                                            disabled={readOnly}
-                                        >
-                                            <SelectTrigger id="category">
-                                                <SelectValue placeholder="Select Category" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="default"><span className="flex items-center gap-2"><Truck className="w-4 h-4" /> Default</span></SelectItem>
-                                                <SelectItem value="animal"><span className="flex items-center gap-2"><Leaf className="w-4 h-4" /> Animal</span></SelectItem>
-                                                <SelectItem value="bicycle"><span className="flex items-center gap-2"><Bike className="w-4 h-4" /> Bicycle</span></SelectItem>
-                                                <SelectItem value="boat"><span className="flex items-center gap-2"><Anchor className="w-4 h-4" /> Boat</span></SelectItem>
-                                                <SelectItem value="bus"><span className="flex items-center gap-2"><Bus className="w-4 h-4" /> Bus</span></SelectItem>
-                                                <SelectItem value="car"><span className="flex items-center gap-2"><Car className="w-4 h-4" /> Car</span></SelectItem>
-                                                <SelectItem value="camper"><span className="flex items-center gap-2"><Truck className="w-4 h-4" /> Camper</span></SelectItem>
-                                                <SelectItem value="crane"><span className="flex items-center gap-2"><Truck className="w-4 h-4" /> Crane</span></SelectItem>
-                                                <SelectItem value="helicopter"><span className="flex items-center gap-2"><Plane className="w-4 h-4" /> Helicopter</span></SelectItem>
-                                                <SelectItem value="motorcycle"><span className="flex items-center gap-2"><Bike className="w-4 h-4" /> Motorcycle</span></SelectItem>
-                                                <SelectItem value="offroad"><span className="flex items-center gap-2"><Truck className="w-4 h-4" /> Offroad</span></SelectItem>
-                                                <SelectItem value="person"><span className="flex items-center gap-2"><User className="w-4 h-4" /> Person</span></SelectItem>
-                                                <SelectItem value="pickup"><span className="flex items-center gap-2"><Car className="w-4 h-4" /> Pickup</span></SelectItem>
-                                                <SelectItem value="plane"><span className="flex items-center gap-2"><Plane className="w-4 h-4" /> Plane</span></SelectItem>
-                                                <SelectItem value="ship"><span className="flex items-center gap-2"><Anchor className="w-4 h-4" /> Ship</span></SelectItem>
-                                                <SelectItem value="tractor"><span className="flex items-center gap-2"><Tractor className="w-4 h-4" /> Tractor</span></SelectItem>
-                                                <SelectItem value="train"><span className="flex items-center gap-2"><Truck className="w-4 h-4" /> Train</span></SelectItem>
-                                                <SelectItem value="tram"><span className="flex items-center gap-2"><Bus className="w-4 h-4" /> Tram</span></SelectItem>
-                                                <SelectItem value="trolleybus"><span className="flex items-center gap-2"><Bus className="w-4 h-4" /> Trolleybus</span></SelectItem>
-                                                <SelectItem value="truck"><span className="flex items-center gap-2"><Truck className="w-4 h-4" /> Truck</span></SelectItem>
-                                                <SelectItem value="van"><span className="flex items-center gap-2"><Truck className="w-4 h-4" /> Van</span></SelectItem>
-                                                <SelectItem value="scooter"><span className="flex items-center gap-2"><Bike className="w-4 h-4" /> Scooter</span></SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
-
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="phone">Phone Number</Label>
-                                        <Input
-                                            id="phone"
-                                            value={formData.phone}
-                                            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                            placeholder="+123456789"
-                                            disabled={readOnly}
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="contact">Contact Info</Label>
-                                        <Input
-                                            id="contact"
-                                            value={formData.contact}
-                                            onChange={(e) => setFormData({ ...formData, contact: e.target.value })}
-                                            placeholder="Owner Name / Support"
-                                            disabled={readOnly}
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label htmlFor="imei">IMEI / Identifier</Label>
-                                    <Input
-                                        id="imei"
-                                        value={formData.imei}
-                                        onChange={(e) => setFormData({ ...formData, imei: e.target.value })}
-                                        required
-                                        placeholder="15-digit IMEI"
-                                        disabled={readOnly}
-                                    />
-                                </div>
-
-                                <div className="flex gap-4">
-                                    <div className="flex-1 flex items-center space-x-2 border p-3 rounded bg-gray-50 h-[74px]">
+                                    <div className="flex items-center space-x-2 pt-2">
                                         <Checkbox
                                             id="disabled"
                                             checked={formData.disabled}
@@ -473,85 +446,55 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                             htmlFor="disabled"
                                             className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                                         >
-                                            Disable Vehicle
+                                            Disable Vehicle (Stop Tracking)
                                         </label>
-                                    </div>
-                                    <div className="flex-1 space-y-2">
-                                        <Label htmlFor="expiration">Expiration Date (Account Validity)</Label>
-                                        <Input
-                                            id="expiration"
-                                            type="date"
-                                            value={expirationDate}
-                                            onChange={(e) => setExpirationDate(e.target.value)}
-                                            disabled={readOnly}
-                                        />
-                                        <p className="text-[10px] text-muted-foreground">Default is 1 year from today.</p>
                                     </div>
                                 </div>
 
-                                {/* Traccar Configuration Attributes */}
-                                <div className="space-y-4 pt-4 border-t">
-                                    <h3 className="font-medium text-gray-900">Device Configuration</h3>
-
+                                {/* Group 2: Assignments & Contact */}
+                                <div className="space-y-4 border rounded-lg p-4 bg-gray-50/50">
+                                    <h3 className="font-semibold text-gray-700 flex items-center gap-2">
+                                        <User className="w-4 h-4" /> Assignments & Contact
+                                    </h3>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
-                                            <Label htmlFor="speedLimit">Speed Limit (km/h)</Label>
-                                            <div className="relative">
-                                                <Input
-                                                    id="speedLimit"
-                                                    type="number"
-                                                    value={speedLimitKmh}
-                                                    onChange={(e) => setSpeedLimitKmh(e.target.value)}
-                                                    placeholder="e.g. 100"
-                                                    disabled={readOnly}
-                                                />
-                                                <span className="absolute right-3 top-2.5 text-xs text-gray-500">km/h</span>
-                                            </div>
-                                            <p className="text-[10px] text-muted-foreground">Values &gt; this will trigger "Over Speed" events.</p>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="fuelDrop">Fuel Drop Threshold</Label>
-                                            <Input
-                                                id="fuelDrop"
-                                                type="number"
-                                                value={fuelDropThreshold}
-                                                onChange={(e) => setFuelDropThreshold(e.target.value)}
-                                                placeholder="e.g. 10"
+                                            <Label htmlFor="user">Assign to User</Label>
+                                            <Select
+                                                value={formData.userId}
+                                                onValueChange={(value) => setFormData({ ...formData, userId: value })}
                                                 disabled={readOnly}
-                                            />
-                                            <p className="text-[10px] text-muted-foreground">Percentage drop to trigger fuel theft alert.</p>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="devicePassword">Device Password</Label>
-                                            <Input
-                                                id="devicePassword"
-                                                type="text"
-                                                value={devicePassword}
-                                                onChange={(e) => setDevicePassword(e.target.value)}
-                                                placeholder="Device Password (if required)"
-                                                disabled={readOnly}
-                                            />
-                                        </div>
-
-                                        <div className="flex items-center space-x-2 border p-3 rounded bg-gray-50 mt-auto h-[42px]">
-                                            <Checkbox
-                                                id="copyAttributes"
-                                                checked={copyAttributes}
-                                                onCheckedChange={(checked) => setCopyAttributes(!!checked)}
-                                                disabled={readOnly}
-                                            />
-                                            <label
-                                                htmlFor="copyAttributes"
-                                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                                             >
-                                                Copy Attributes (Processing)
-                                            </label>
+                                                <SelectTrigger id="user">
+                                                    <SelectValue placeholder="Select a user" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                                                    {users.map(user => (
+                                                        <SelectItem key={user.id} value={user.id.toString()}>{user.name}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
                                         </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4 mt-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="driver">Assign Driver</Label>
+                                            <Select
+                                                value={formData.driverId}
+                                                onValueChange={(value) => setFormData({ ...formData, driverId: value === "unassigned" ? undefined : value })}
+                                                disabled={readOnly}
+                                            >
+                                                <SelectTrigger id="driver">
+                                                    <SelectValue placeholder="Select a driver" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                                                    {drivers.map(driver => (
+                                                        <SelectItem key={driver.id} value={driver.id.toString()}>
+                                                            {driver.name} {driver.uniqueId ? `(${driver.uniqueId})` : ""}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
                                         <div className="space-y-2">
                                             <Label htmlFor="saleRef">Sale Ref (Person/ID)</Label>
                                             <Input
@@ -574,52 +517,107 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                                 disabled={readOnly}
                                             />
                                         </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="phone">Phone Number</Label>
+                                            <Input
+                                                id="phone"
+                                                value={formData.phone}
+                                                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                                placeholder="+123456789"
+                                                disabled={readOnly}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="contact">Contact Info</Label>
+                                            <Input
+                                                id="contact"
+                                                value={formData.contact}
+                                                onChange={(e) => setFormData({ ...formData, contact: e.target.value })}
+                                                placeholder="Owner Name / Support"
+                                                disabled={readOnly}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="user">Assign to User (Optional)</Label>
-                                        <Select
-                                            value={formData.userId}
-                                            onValueChange={(value) => setFormData({ ...formData, userId: value })}
-                                            disabled={readOnly}
-                                        >
-                                            <SelectTrigger id="user">
-                                                <SelectValue placeholder="Select a user" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="unassigned">Unassigned</SelectItem>
-                                                {users.map(user => (
-                                                    <SelectItem key={user.id} value={user.id.toString()}>{user.name}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                {/* Group 3: Device Connection */}
+                                <div className="space-y-4 border rounded-lg p-4 bg-gray-50/50">
+                                    <h3 className="font-semibold text-gray-700 flex items-center gap-2">
+                                        <Leaf className="w-4 h-4" /> Connection Details
+                                    </h3>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="imei">IMEI / Identifier</Label>
+                                            <Input
+                                                id="imei"
+                                                value={formData.imei}
+                                                onChange={(e) => setFormData({ ...formData, imei: e.target.value })}
+                                                required
+                                                placeholder="15-digit IMEI"
+                                                disabled={readOnly}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="devicePassword">Device Password</Label>
+                                            <Input
+                                                id="devicePassword"
+                                                type="text"
+                                                value={devicePassword}
+                                                onChange={(e) => setDevicePassword(e.target.value)}
+                                                placeholder="Device Password (if required)"
+                                                disabled={readOnly}
+                                            />
+                                        </div>
+                                        <div className="flex items-center space-x-2 border p-3 rounded bg-white mt-auto h-[42px]">
+                                            <Checkbox
+                                                id="copyAttributes"
+                                                checked={copyAttributes}
+                                                onCheckedChange={(checked) => setCopyAttributes(!!checked)}
+                                                disabled={readOnly}
+                                            />
+                                            <label
+                                                htmlFor="copyAttributes"
+                                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                                            >
+                                                Copy Attributes (Processing)
+                                            </label>
+                                        </div>
                                     </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="driver">Assign Driver (Optional)</Label>
-                                        <Select
-                                            value={formData.driverId}
-                                            onValueChange={(value) => setFormData({ ...formData, driverId: value === "unassigned" ? undefined : value })}
-                                            disabled={readOnly}
-                                        >
-                                            <SelectTrigger id="driver">
-                                                <SelectValue placeholder="Select a driver" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="unassigned">Unassigned</SelectItem>
-                                                {drivers.map(driver => (
-                                                    <SelectItem key={driver.id} value={driver.id.toString()}>
-                                                        {driver.name} {driver.uniqueId ? `(${driver.uniqueId})` : ""}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        {!readOnly && (
-                                            <p className="text-xs text-muted-foreground">
-                                                Select a driver from the list.
-                                            </p>
-                                        )}
+                                </div>
+
+                                {/* Group 4: Device Configuration */}
+                                <div className="space-y-4 border rounded-lg p-4 bg-gray-50/50">
+                                    <h3 className="font-semibold text-gray-700 flex items-center gap-2">
+                                        <Tractor className="w-4 h-4" /> Configuration
+                                    </h3>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="speedLimit">Speed Limit (km/h)</Label>
+                                            <div className="relative">
+                                                <Input
+                                                    id="speedLimit"
+                                                    type="number"
+                                                    value={speedLimitKmh}
+                                                    onChange={(e) => setSpeedLimitKmh(e.target.value)}
+                                                    placeholder="e.g. 100"
+                                                    disabled={readOnly}
+                                                />
+                                                <span className="absolute right-3 top-2.5 text-xs text-gray-500">km/h</span>
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground">Values &gt; this will trigger "Over Speed" events.</p>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="fuelDrop">Fuel Drop Threshold</Label>
+                                            <Input
+                                                id="fuelDrop"
+                                                type="number"
+                                                value={fuelDropThreshold}
+                                                onChange={(e) => setFuelDropThreshold(e.target.value)}
+                                                placeholder="e.g. 10"
+                                                disabled={readOnly}
+                                            />
+                                            <p className="text-[10px] text-muted-foreground">Percentage drop to trigger fuel theft alert.</p>
+                                        </div>
                                     </div>
                                 </div>
 
