@@ -21,6 +21,12 @@ export interface Vehicle {
     icon: "truck" | "car" | "van" | "bus" | "motorcycle" | "default";
     positionId?: string;
     maxSpeed?: number;
+    phone?: string;
+    contact?: string;
+    category?: string;
+    disabled?: boolean;
+    attributes?: Record<string, any>;
+    expirationTime?: string;
 }
 
 export interface Geofence {

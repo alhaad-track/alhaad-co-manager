@@ -39,6 +39,22 @@ export async function getDevices() {
     return fetchJson<any[]>("/api/devices");
 }
 
+export async function createDevice(device: any) {
+    return fetchJson<any>("/api/devices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(device),
+    });
+}
+
+export async function updateDevice(id: string, device: any) {
+    return fetchJson<any>(`/api/devices/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(device),
+    });
+}
+
 export async function getDrivers() {
     return fetchJson<any[]>("/api/drivers");
 }

@@ -84,7 +84,15 @@ export default function ViewVehiclePage({ params }: { params: Promise<{ id: stri
                     lastUpdate: vehicle.lastUpdate,
                     lat: position?.latitude || 0,
                     lng: position?.longitude || 0,
-                    icon: "truck"
+                    icon: "truck",
+                    category: vehicle.category,
+                    phone: vehicle.phone,
+                    contact: vehicle.contact,
+                    disabled: vehicle.disabled,
+                    attributes: vehicle.attributes,
+                    expirationTime: vehicle.expirationTime,
+                    userId: vehicle.attributes?.userId || vehicle.userId, // generic fallback
+                    driverId: vehicle.attributes?.driverId || vehicle.driverId
                 }}
                 readOnly={true}
                 positionData={position}

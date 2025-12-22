@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Save, Loader2, ChevronUp, ChevronDown, X } from "lucide-react";
+import { ArrowLeft, Save, Loader2, ChevronUp, ChevronDown, X, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { Vehicle, initialUsers, initialDrivers, initialVehicles, initialGeofences, initialTrips } from "@/lib/data";
+import { Vehicle, initialVehicles, initialGeofences } from "@/lib/data";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import TripHistory from "./TripHistory";
@@ -39,26 +39,58 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
         lng: initialData?.lng || 0,
         lastUpdate: initialData?.lastUpdate || "Just now",
         assignedGeofenceIds: initialData?.assignedGeofenceIds || [],
-        icon: initialData?.icon || "default"
+        icon: initialData?.icon || "default",
+        phone: initialData?.phone || "",
+        contact: initialData?.contact || "",
+        category: initialData?.category || "default",
+        attributes: initialData?.attributes || {}
     });
 
-    // Fetched Geofences State
+    // Specific Attribute States (managed separately for UI convenience, merged into attributes on submit)
+    const [speedLimitKmh, setSpeedLimitKmh] = useState<string>(() => {
+        const knots = initialData?.attributes?.speedLimit;
+        return knots ? Math.round(knots * 1.852).toString() : "";
+    });
+    const [fuelDropThreshold, setFuelDropThreshold] = useState<string>(() => initialData?.attributes?.fuelDropThreshold?.toString() || "");
+    const [devicePassword, setDevicePassword] = useState<string>(() => initialData?.attributes?.devicePassword || "");
+    const [copyAttributes, setCopyAttributes] = useState<boolean>(() => !!initialData?.attributes?.["processing.copyAttributes"]);
+
+    // Expiration Date State (Standard HTML date input uses YYYY-MM-DD)
+    const [expirationDate, setExpirationDate] = useState<string>(() => {
+        if (initialData?.expirationTime) {
+            return new Date(initialData.expirationTime).toISOString().split('T')[0];
+        }
+        // Default to 1 year from now for new vehicles
+        const nextYear = new Date();
+        nextYear.setFullYear(nextYear.getFullYear() + 1);
+        return nextYear.toISOString().split('T')[0];
+    });
+
+    // Fetched Lists
+    const [users, setUsers] = useState<any[]>([]);
+    const [drivers, setDrivers] = useState<any[]>([]);
     const [availableGeofences, setAvailableGeofences] = useState<any[]>([]);
 
     useEffect(() => {
-        const fetchGeofences = async () => {
+        const fetchResources = async () => {
             try {
-                // Dynamically import to avoid circular dep issues if any, or just consistent with previous code style
-                const { getGeofences } = await import("@/lib/api");
-                const data = await getGeofences();
-                setAvailableGeofences(data);
+                const { getGeofences, getUsers, getDrivers } = await import("@/lib/api");
+                const [geofencesData, usersData, driversData] = await Promise.all([
+                    getGeofences(),
+                    getUsers(),
+                    getDrivers()
+                ]);
+
+                setAvailableGeofences(geofencesData || []);
+                setUsers(usersData || []);
+                setDrivers(driversData || []);
             } catch (err) {
-                console.error("Failed to fetch geofences", err);
-                // Fallback to initialGeofences if API fails
+                console.error("Failed to fetch resources", err);
                 setAvailableGeofences(initialGeofences);
+                // Ideally show error toast
             }
         };
-        fetchGeofences();
+        fetchResources();
     }, []);
 
     const [accordionValue, setAccordionValue] = useState("details");
@@ -78,11 +110,7 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
     const [currentAddress, setCurrentAddress] = useState<string | null>(null);
     const [loadingAddress, setLoadingAddress] = useState(false);
 
-    // Filter available drivers: show drivers that are NOT assigned to any vehicle OR the driver currently assigned to THIS vehicle
-    const availableDrivers = initialDrivers.filter(d => {
-        const isAssignedToOther = initialVehicles.some(v => v.driverId === d.id && v.id !== initialData?.id);
-        return !isAssignedToOther;
-    });
+
 
     const handleAccordionChange = (val: string) => {
         setAccordionValue(val);
@@ -231,9 +259,69 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
         // Simulate API call
         await new Promise(resolve => setTimeout(resolve, 1000));
 
-        console.log("Vehicle Data:", formData);
+        // Merge specific fields into attributes
+        const attributesObj: Record<string, any> = { ...formData.attributes };
 
-        router.push("/dashboard/vehicles");
+        // Speed Limit (convert km/h to knots)
+        if (speedLimitKmh) {
+            attributesObj.speedLimit = Number(speedLimitKmh) / 1.852;
+        } else {
+            delete attributesObj.speedLimit;
+        }
+
+        // Fuel Drop Threshold
+        if (fuelDropThreshold) {
+            attributesObj.fuelDropThreshold = Number(fuelDropThreshold);
+        } else {
+            delete attributesObj.fuelDropThreshold;
+        }
+
+        // Device Password
+        if (devicePassword) {
+            attributesObj.devicePassword = devicePassword;
+        } else {
+            delete attributesObj.devicePassword;
+        }
+
+        // Copy Attributes
+        if (copyAttributes) {
+            attributesObj["processing.copyAttributes"] = true;
+        } else {
+            delete attributesObj["processing.copyAttributes"];
+        }
+
+        const finalData = {
+            id: isEditing && initialData?.id ? Number(initialData.id) : -1,
+            name: formData.name,
+            uniqueId: formData.imei,
+            phone: formData.phone,
+            model: formData.model,
+            contact: formData.contact,
+            category: formData.category,
+            disabled: formData.disabled,
+            attributes: attributesObj,
+            expirationTime: expirationDate ? new Date(expirationDate).toISOString() : undefined
+        };
+
+        try {
+            const { createDevice, updateDevice } = await import("@/lib/api");
+
+            if (isEditing && initialData?.id) {
+                await updateDevice(initialData.id, finalData);
+            } else {
+                await createDevice(finalData);
+            }
+
+            // Assign User / Driver if selected (Separate API calls might be needed if Traccar device endpoint doesn't support direct assignment, but standard Traccar creates permissions separately. Assuming device creation is primary user goal for now. For full flow, permissions APIs would be needed but simplified for now.)
+
+            router.push("/dashboard/vehicles");
+        } catch (error) {
+            console.error("Failed to save vehicle", error);
+            // Ideally show error toast here
+            alert("Failed to save vehicle. Please check your inputs and connection.");
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -285,6 +373,42 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                         />
                                     </div>
                                     <div className="space-y-2">
+                                        <Label htmlFor="category">Category</Label>
+                                        <Select
+                                            value={formData.category || "default"}
+                                            onValueChange={(value) => setFormData({ ...formData, category: value })}
+                                            disabled={readOnly}
+                                        >
+                                            <SelectTrigger id="category">
+                                                <SelectValue placeholder="Select Category" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="default">Default</SelectItem>
+                                                <SelectItem value="animal">Animal</SelectItem>
+                                                <SelectItem value="bicycle">Bicycle</SelectItem>
+                                                <SelectItem value="boat">Boat</SelectItem>
+                                                <SelectItem value="bus">Bus</SelectItem>
+                                                <SelectItem value="car">Car</SelectItem>
+                                                <SelectItem value="camper">Camper</SelectItem>
+                                                <SelectItem value="crane">Crane</SelectItem>
+                                                <SelectItem value="helicopter">Helicopter</SelectItem>
+                                                <SelectItem value="motorcycle">Motorcycle</SelectItem>
+                                                <SelectItem value="offroad">Offroad</SelectItem>
+                                                <SelectItem value="person">Person</SelectItem>
+                                                <SelectItem value="pickup">Pickup</SelectItem>
+                                                <SelectItem value="plane">Plane</SelectItem>
+                                                <SelectItem value="ship">Ship</SelectItem>
+                                                <SelectItem value="tractor">Tractor</SelectItem>
+                                                <SelectItem value="train">Train</SelectItem>
+                                                <SelectItem value="tram">Tram</SelectItem>
+                                                <SelectItem value="trolleybus">Trolleybus</SelectItem>
+                                                <SelectItem value="truck">Truck</SelectItem>
+                                                <SelectItem value="van">Van</SelectItem>
+                                                <SelectItem value="scooter">Scooter</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
                                         <Label htmlFor="icon">Icon</Label>
                                         <Select
                                             value={formData.icon || "default"}
@@ -306,6 +430,30 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                     </div>
                                 </div>
 
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="phone">Phone Number</Label>
+                                        <Input
+                                            id="phone"
+                                            value={formData.phone}
+                                            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                            placeholder="+123456789"
+                                            disabled={readOnly}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="contact">Contact Info</Label>
+                                        <Input
+                                            id="contact"
+                                            value={formData.contact}
+                                            onChange={(e) => setFormData({ ...formData, contact: e.target.value })}
+                                            placeholder="Owner Name / Support"
+                                            disabled={readOnly}
+                                        />
+                                    </div>
+                                </div>
+
                                 <div className="space-y-2">
                                     <Label htmlFor="imei">IMEI / Identifier</Label>
                                     <Input
@@ -316,6 +464,97 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                         placeholder="15-digit IMEI"
                                         disabled={readOnly}
                                     />
+                                </div>
+
+                                <div className="flex gap-4">
+                                    <div className="flex-1 flex items-center space-x-2 border p-3 rounded bg-gray-50 h-[74px]">
+                                        <Checkbox
+                                            id="disabled"
+                                            checked={formData.disabled}
+                                            onCheckedChange={(checked) => setFormData({ ...formData, disabled: !!checked })}
+                                            disabled={readOnly}
+                                        />
+                                        <label
+                                            htmlFor="disabled"
+                                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                                        >
+                                            Disable Vehicle
+                                        </label>
+                                    </div>
+                                    <div className="flex-1 space-y-2">
+                                        <Label htmlFor="expiration">Expiration Date (Account Validity)</Label>
+                                        <Input
+                                            id="expiration"
+                                            type="date"
+                                            value={expirationDate}
+                                            onChange={(e) => setExpirationDate(e.target.value)}
+                                            disabled={readOnly}
+                                        />
+                                        <p className="text-[10px] text-muted-foreground">Default is 1 year from today.</p>
+                                    </div>
+                                </div>
+
+                                {/* Traccar Configuration Attributes */}
+                                <div className="space-y-4 pt-4 border-t">
+                                    <h3 className="font-medium text-gray-900">Device Configuration</h3>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="speedLimit">Speed Limit (km/h)</Label>
+                                            <div className="relative">
+                                                <Input
+                                                    id="speedLimit"
+                                                    type="number"
+                                                    value={speedLimitKmh}
+                                                    onChange={(e) => setSpeedLimitKmh(e.target.value)}
+                                                    placeholder="e.g. 100"
+                                                    disabled={readOnly}
+                                                />
+                                                <span className="absolute right-3 top-2.5 text-xs text-gray-500">km/h</span>
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground">Values &gt; this will trigger "Over Speed" events.</p>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="fuelDrop">Fuel Drop Threshold</Label>
+                                            <Input
+                                                id="fuelDrop"
+                                                type="number"
+                                                value={fuelDropThreshold}
+                                                onChange={(e) => setFuelDropThreshold(e.target.value)}
+                                                placeholder="e.g. 10"
+                                                disabled={readOnly}
+                                            />
+                                            <p className="text-[10px] text-muted-foreground">Percentage drop to trigger fuel theft alert.</p>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="devicePassword">Device Password</Label>
+                                            <Input
+                                                id="devicePassword"
+                                                type="text"
+                                                value={devicePassword}
+                                                onChange={(e) => setDevicePassword(e.target.value)}
+                                                placeholder="Device Password (if required)"
+                                                disabled={readOnly}
+                                            />
+                                        </div>
+
+                                        <div className="flex items-center space-x-2 border p-3 rounded bg-gray-50 mt-auto h-[42px]">
+                                            <Checkbox
+                                                id="copyAttributes"
+                                                checked={copyAttributes}
+                                                onCheckedChange={(checked) => setCopyAttributes(!!checked)}
+                                                disabled={readOnly}
+                                            />
+                                            <label
+                                                htmlFor="copyAttributes"
+                                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                                            >
+                                                Copy Attributes (Processing)
+                                            </label>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
@@ -331,8 +570,8 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="unassigned">Unassigned</SelectItem>
-                                                {initialUsers.map(user => (
-                                                    <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
+                                                {users.map(user => (
+                                                    <SelectItem key={user.id} value={user.id.toString()}>{user.name}</SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>
@@ -349,16 +588,16 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="unassigned">Unassigned</SelectItem>
-                                                {availableDrivers.map(driver => (
-                                                    <SelectItem key={driver.id} value={driver.id}>
-                                                        {driver.firstName} {driver.lastName}
+                                                {drivers.map(driver => (
+                                                    <SelectItem key={driver.id} value={driver.id.toString()}>
+                                                        {driver.name} {driver.uniqueId ? `(${driver.uniqueId})` : ""}
                                                     </SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>
                                         {!readOnly && (
                                             <p className="text-xs text-muted-foreground">
-                                                Only available drivers are shown.
+                                                Select a driver from the list.
                                             </p>
                                         )}
                                     </div>
