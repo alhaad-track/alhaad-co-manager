@@ -5,7 +5,7 @@ import { initialVehicles, Vehicle, initialUsers } from "@/lib/data";
 import { traccarApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Search, Truck, Car, AlertCircle } from "lucide-react";
+import { Plus, Search, Truck, Car, AlertCircle, Ship, Plane, Bike, User, Bus, Anchor, Tractor } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -35,7 +35,8 @@ export default function VehiclesPage() {
                     lastUpdate: new Date(device.lastUpdate).toLocaleString(),
                     lat: 0, // Placeholder
                     lng: 0, // Placeholder
-                    icon: "truck", // Default icon
+                    icon: device.category || "default",
+                    category: device.category,
                     positionId: device.positionId?.toString(),
                 }));
 
@@ -71,6 +72,24 @@ export default function VehiclesPage() {
             case "moving": return "text-blue-600 bg-blue-50 border-blue-200";
             case "offline": return "text-gray-600 bg-gray-50 border-gray-200";
             default: return "text-gray-600 bg-gray-50 border-gray-200";
+        }
+    };
+
+    const getCategoryIcon = (category?: string) => {
+        switch (category?.toLowerCase()) {
+            case "car": return <Car className="h-4 w-4 text-muted-foreground" />;
+            case "truck": return <Truck className="h-4 w-4 text-muted-foreground" />;
+            case "bus": return <Bus className="h-4 w-4 text-muted-foreground" />;
+            case "motorcycle":
+            case "scooter":
+            case "bicycle": return <Bike className="h-4 w-4 text-muted-foreground" />;
+            case "ship":
+            case "boat": return <Anchor className="h-4 w-4 text-muted-foreground" />; // or Ship if available
+            case "plane":
+            case "helicopter": return <Plane className="h-4 w-4 text-muted-foreground" />;
+            case "tractor": return <Tractor className="h-4 w-4 text-muted-foreground" />;
+            case "person": return <User className="h-4 w-4 text-muted-foreground" />;
+            default: return <Truck className="h-4 w-4 text-muted-foreground" />;
         }
     };
 
@@ -118,7 +137,7 @@ export default function VehiclesPage() {
                             <CardTitle className="text-sm font-medium">
                                 {vehicle.name}
                             </CardTitle>
-                            <Truck className="h-4 w-4 text-muted-foreground" />
+                            {getCategoryIcon(vehicle.category)}
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold">{vehicle.model}</div>

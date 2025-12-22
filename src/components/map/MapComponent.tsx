@@ -6,7 +6,7 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { reverseGeocode } from "@/lib/api";
 import { Vehicle, mockTripPaths } from "@/lib/data";
-import { Car, Truck, Bus, Bike, Box } from "lucide-react";
+import { Car, Truck, Bus, Bike, Box, Anchor, Plane, User, Leaf, Tractor, Ship } from "lucide-react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 // Fix Leaflet icon issue
@@ -118,20 +118,52 @@ function ZoomHandler({ setZoom }: { setZoom: (z: number) => void }) {
 }
 
 // Helper to create custom marker icon
-const createVehicleIcon = (type: string) => {
-    if (type === "default" || !type) {
-        return customIcon;
+const createVehicleIcon = (type: string, category?: string) => {
+    // Use category if available, otherwise fallback to icon (legacy) or default
+    const iconType = (category || type || "default").toLowerCase();
+
+    let IconComponent = Truck; // Default fallback
+
+    switch (iconType) {
+        case "car":
+        case "pickup": IconComponent = Car; break;
+
+        case "truck":
+        case "camper":
+        case "crane":
+        case "offroad":
+        case "tractor": IconComponent = Tractor; break; // Or specific tractor icon if imported, defaulting truck/tractor for heavy
+
+        case "van":
+        case "ambulance": IconComponent = Box; break; // Box often represents delivery/van
+
+        case "bus":
+        case "minibus":
+        case "trolleybus":
+        case "tram": IconComponent = Bus; break;
+
+        case "motorcycle":
+        case "scooter":
+        case "bicycle": IconComponent = Bike; break;
+
+        case "boat":
+        case "ship": IconComponent = Anchor; break;
+
+        case "plane":
+        case "helicopter": IconComponent = Plane; break;
+
+        case "person": IconComponent = User; break;
+
+        case "animal": IconComponent = Leaf; break;
+
+        case "train": IconComponent = Truck; break; // No train icon in standard import yet, fallback
+
+        default: IconComponent = Truck;
     }
 
-    let IconComponent = Car;
-    switch (type) {
-        case "truck": IconComponent = Truck; break;
-        case "van": IconComponent = Box; break; // Using Box as proxy for Van
-        case "bus": IconComponent = Bus; break;
-        case "motorcycle": IconComponent = Bike; break;
-        case "car": IconComponent = Car; break;
-        default: return customIcon;
-    }
+    // Specific overrides if needed (e.g. Tractor)
+    if (iconType === 'tractor') IconComponent = Tractor;
+    if (iconType === 'ship' || iconType === 'boat') IconComponent = Ship;
 
     const iconHtml = renderToStaticMarkup(
         <div className="bg-white rounded-full p-1 border-2 border-blue-600 shadow-md">
@@ -397,7 +429,7 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
                 <MovingMarker
                     key={vehicle.id}
                     position={[vehicle.lat, vehicle.lng]}
-                    icon={createVehicleIcon(vehicle.icon || "car")}
+                    icon={createVehicleIcon(vehicle.icon || "default", vehicle.category)}
                     onSelect={() => {
                         if (onSelectVehicle) {
                             onSelectVehicle(vehicle);

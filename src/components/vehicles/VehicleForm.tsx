@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Save, Loader2, ChevronUp, ChevronDown, X, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Save, Loader2, ChevronUp, ChevronDown, X, Plus, Trash2, Truck, Car, Bus, Bike, Anchor, Plane, Tractor, User, Leaf } from "lucide-react";
 import Link from "next/link";
 import { Vehicle, initialVehicles, initialGeofences } from "@/lib/data";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -383,48 +383,28 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                                 <SelectValue placeholder="Select Category" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="default">Default</SelectItem>
-                                                <SelectItem value="animal">Animal</SelectItem>
-                                                <SelectItem value="bicycle">Bicycle</SelectItem>
-                                                <SelectItem value="boat">Boat</SelectItem>
-                                                <SelectItem value="bus">Bus</SelectItem>
-                                                <SelectItem value="car">Car</SelectItem>
-                                                <SelectItem value="camper">Camper</SelectItem>
-                                                <SelectItem value="crane">Crane</SelectItem>
-                                                <SelectItem value="helicopter">Helicopter</SelectItem>
-                                                <SelectItem value="motorcycle">Motorcycle</SelectItem>
-                                                <SelectItem value="offroad">Offroad</SelectItem>
-                                                <SelectItem value="person">Person</SelectItem>
-                                                <SelectItem value="pickup">Pickup</SelectItem>
-                                                <SelectItem value="plane">Plane</SelectItem>
-                                                <SelectItem value="ship">Ship</SelectItem>
-                                                <SelectItem value="tractor">Tractor</SelectItem>
-                                                <SelectItem value="train">Train</SelectItem>
-                                                <SelectItem value="tram">Tram</SelectItem>
-                                                <SelectItem value="trolleybus">Trolleybus</SelectItem>
-                                                <SelectItem value="truck">Truck</SelectItem>
-                                                <SelectItem value="van">Van</SelectItem>
-                                                <SelectItem value="scooter">Scooter</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="icon">Icon</Label>
-                                        <Select
-                                            value={formData.icon || "default"}
-                                            onValueChange={(value: any) => setFormData({ ...formData, icon: value })}
-                                            disabled={readOnly}
-                                        >
-                                            <SelectTrigger id="icon">
-                                                <SelectValue placeholder="Select an icon" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="default">Default (Standard Marker)</SelectItem>
-                                                <SelectItem value="car">Car</SelectItem>
-                                                <SelectItem value="truck">Truck</SelectItem>
-                                                <SelectItem value="van">Van</SelectItem>
-                                                <SelectItem value="bus">Bus</SelectItem>
-                                                <SelectItem value="motorcycle">Motorcycle</SelectItem>
+                                                <SelectItem value="default"><span className="flex items-center gap-2"><Truck className="w-4 h-4" /> Default</span></SelectItem>
+                                                <SelectItem value="animal"><span className="flex items-center gap-2"><Leaf className="w-4 h-4" /> Animal</span></SelectItem>
+                                                <SelectItem value="bicycle"><span className="flex items-center gap-2"><Bike className="w-4 h-4" /> Bicycle</span></SelectItem>
+                                                <SelectItem value="boat"><span className="flex items-center gap-2"><Anchor className="w-4 h-4" /> Boat</span></SelectItem>
+                                                <SelectItem value="bus"><span className="flex items-center gap-2"><Bus className="w-4 h-4" /> Bus</span></SelectItem>
+                                                <SelectItem value="car"><span className="flex items-center gap-2"><Car className="w-4 h-4" /> Car</span></SelectItem>
+                                                <SelectItem value="camper"><span className="flex items-center gap-2"><Truck className="w-4 h-4" /> Camper</span></SelectItem>
+                                                <SelectItem value="crane"><span className="flex items-center gap-2"><Truck className="w-4 h-4" /> Crane</span></SelectItem>
+                                                <SelectItem value="helicopter"><span className="flex items-center gap-2"><Plane className="w-4 h-4" /> Helicopter</span></SelectItem>
+                                                <SelectItem value="motorcycle"><span className="flex items-center gap-2"><Bike className="w-4 h-4" /> Motorcycle</span></SelectItem>
+                                                <SelectItem value="offroad"><span className="flex items-center gap-2"><Truck className="w-4 h-4" /> Offroad</span></SelectItem>
+                                                <SelectItem value="person"><span className="flex items-center gap-2"><User className="w-4 h-4" /> Person</span></SelectItem>
+                                                <SelectItem value="pickup"><span className="flex items-center gap-2"><Car className="w-4 h-4" /> Pickup</span></SelectItem>
+                                                <SelectItem value="plane"><span className="flex items-center gap-2"><Plane className="w-4 h-4" /> Plane</span></SelectItem>
+                                                <SelectItem value="ship"><span className="flex items-center gap-2"><Anchor className="w-4 h-4" /> Ship</span></SelectItem>
+                                                <SelectItem value="tractor"><span className="flex items-center gap-2"><Tractor className="w-4 h-4" /> Tractor</span></SelectItem>
+                                                <SelectItem value="train"><span className="flex items-center gap-2"><Truck className="w-4 h-4" /> Train</span></SelectItem>
+                                                <SelectItem value="tram"><span className="flex items-center gap-2"><Bus className="w-4 h-4" /> Tram</span></SelectItem>
+                                                <SelectItem value="trolleybus"><span className="flex items-center gap-2"><Bus className="w-4 h-4" /> Trolleybus</span></SelectItem>
+                                                <SelectItem value="truck"><span className="flex items-center gap-2"><Truck className="w-4 h-4" /> Truck</span></SelectItem>
+                                                <SelectItem value="van"><span className="flex items-center gap-2"><Truck className="w-4 h-4" /> Van</span></SelectItem>
+                                                <SelectItem value="scooter"><span className="flex items-center gap-2"><Bike className="w-4 h-4" /> Scooter</span></SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
