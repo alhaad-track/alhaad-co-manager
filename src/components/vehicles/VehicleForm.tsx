@@ -54,6 +54,8 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
     const [fuelDropThreshold, setFuelDropThreshold] = useState<string>(() => initialData?.attributes?.fuelDropThreshold?.toString() || "");
     const [devicePassword, setDevicePassword] = useState<string>(() => initialData?.attributes?.devicePassword || "");
     const [copyAttributes, setCopyAttributes] = useState<boolean>(() => !!initialData?.attributes?.["processing.copyAttributes"]);
+    const [saleRef, setSaleRef] = useState<string>(() => initialData?.attributes?.saleRef || "");
+    const [supportManager, setSupportManager] = useState<string>(() => initialData?.attributes?.supportManager || "");
 
     // Expiration Date State (Standard HTML date input uses YYYY-MM-DD)
     const [expirationDate, setExpirationDate] = useState<string>(() => {
@@ -283,11 +285,24 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
             delete attributesObj.devicePassword;
         }
 
-        // Copy Attributes
         if (copyAttributes) {
             attributesObj["processing.copyAttributes"] = true;
         } else {
             delete attributesObj["processing.copyAttributes"];
+        }
+
+        // Sale Ref
+        if (saleRef) {
+            attributesObj.saleRef = saleRef;
+        } else {
+            delete attributesObj.saleRef;
+        }
+
+        // Support Manager
+        if (supportManager) {
+            attributesObj.supportManager = supportManager;
+        } else {
+            delete attributesObj.supportManager;
         }
 
         const finalData = {
@@ -533,6 +548,31 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                             >
                                                 Copy Attributes (Processing)
                                             </label>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4 mt-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="saleRef">Sale Ref (Person/ID)</Label>
+                                            <Input
+                                                id="saleRef"
+                                                type="text"
+                                                value={saleRef}
+                                                onChange={(e) => setSaleRef(e.target.value)}
+                                                placeholder="e.g. Sales-101"
+                                                disabled={readOnly}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="supportManager">Support Manager</Label>
+                                            <Input
+                                                id="supportManager"
+                                                type="text"
+                                                value={supportManager}
+                                                onChange={(e) => setSupportManager(e.target.value)}
+                                                placeholder="e.g. John Doe"
+                                                disabled={readOnly}
+                                            />
                                         </div>
                                     </div>
                                 </div>
@@ -787,7 +827,7 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                         </AccordionItem>
                     )}
                 </Accordion>
-            </Card>
+            </Card >
         </div >
     );
 }
