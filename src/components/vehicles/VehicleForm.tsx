@@ -303,8 +303,6 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
             expirationTime: expirationDate ? new Date(expirationDate).toISOString() : undefined
         };
 
-        console.log("Submitting Vehicle Data:", finalData); // DEBUG: Check what's being sent
-
         try {
             const { createDevice, updateDevice } = await import("@/lib/api");
 
