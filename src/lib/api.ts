@@ -33,6 +33,9 @@ async function fetchJson<T>(endpoint: string, options?: RequestInit): Promise<T>
     if (!res.ok) {
         throw new Error(`API request to ${endpoint} failed with status ${res.status}`);
     }
+    if (res.status === 204) {
+        return {} as T;
+    }
     return res.json();
 }
 
@@ -60,8 +63,8 @@ export async function getDrivers() {
     return fetchJson<any[]>("/api/drivers");
 }
 
-export async function getUsers() {
-    return fetchJson<any[]>("/api/users");
+export async function getUsers(query?: string) {
+    return fetchJson<any[]>(`/api/users${query ? `?${query}` : ""}`);
 }
 
 export async function getGeofences() {
@@ -97,3 +100,22 @@ export async function reverseGeocode(latitude: number, longitude: number) {
     if (!res.ok) throw new Error("Geocoding failed");
     return res.text();
 }
+
+export async function addPermission(permission: { userId?: number; deviceId?: number; driverId?: number; geofenceId?: number;[key: string]: any }) {
+    return fetchJson<any>("/api/permissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(permission),
+    });
+}
+
+export async function removePermission(permission: { userId?: number; deviceId?: number;[key: string]: any }) {
+    return fetchJson<any>("/api/permissions", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(permission),
+    });
+}
+
+
+

@@ -14,6 +14,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import TripHistory from "./TripHistory";
 import TripMap from "@/components/map/TripMap";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 
 interface VehicleFormProps {
     initialData?: Vehicle;
@@ -56,6 +64,9 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
     const [copyAttributes, setCopyAttributes] = useState<boolean>(() => !!initialData?.attributes?.["processing.copyAttributes"]);
     const [saleRef, setSaleRef] = useState<string>(() => initialData?.attributes?.saleRef || "");
     const [supportManager, setSupportManager] = useState<string>(() => initialData?.attributes?.supportManager || "");
+    const [currentAssignedUserId, setCurrentAssignedUserId] = useState<string | null>(null);
+    const [assignedUsers, setAssignedUsers] = useState<any[]>([]);
+    const [userToRemove, setUserToRemove] = useState<string | null>(null);
 
     // Expiration Date State (Standard HTML date input uses YYYY-MM-DD)
     const [expirationDate, setExpirationDate] = useState<string>(() => {
@@ -94,6 +105,43 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
         };
         fetchResources();
     }, []);
+
+    // Fetch initial permissions and match driver
+    useEffect(() => {
+        const initData = async () => {
+            if (initialData?.id) {
+                try {
+                    const { getUsers } = await import("@/lib/api");
+                    // Using getUsers with deviceId query to check assignment
+                    const linkedUsers = await getUsers(`deviceId=${initialData.id}`);
+
+                    if (linkedUsers && linkedUsers.length > 0) {
+                        setAssignedUsers(linkedUsers);
+                        const firstUser = linkedUsers[0];
+                        if (firstUser && firstUser.id) {
+                            setCurrentAssignedUserId(firstUser.id.toString());
+                            setFormData(prev => ({ ...prev, userId: firstUser.id.toString() }));
+                        }
+                    } else {
+                        setAssignedUsers([]);
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch linked users", e);
+                }
+            }
+        };
+        initData();
+    }, [isEditing, initialData?.id]);
+
+    // Match driver from uniqueId if driverId is missing
+    useEffect(() => {
+        if ((initialData as any)?.uniqueId && drivers.length > 0 && !formData.driverId && (initialData as any).driverUniqueId) {
+            const d = drivers.find(d => d.uniqueId === (initialData as any).driverUniqueId);
+            if (d) {
+                setFormData(prev => ({ ...prev, driverId: d.id.toString() }));
+            }
+        }
+    }, [drivers, initialData]);
 
     const [accordionValue, setAccordionValue] = useState("details");
     const [trips, setTrips] = useState<any[]>([]); // Using any[] to match TripHistory props if we cast or map
@@ -192,6 +240,36 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
             console.error("Failed to fetch address", e);
         } finally {
             setLoadingAddress(false);
+        }
+    };
+
+    const handleRemoveUser = (userId: string) => {
+        setUserToRemove(userId);
+    };
+
+    const confirmRemoveUser = async () => {
+        if (!userToRemove) return;
+
+        try {
+            const { removePermission } = await import("@/lib/api");
+            await removePermission({ userId: Number(userToRemove), deviceId: Number(initialData?.id) });
+
+            // Update state
+            setAssignedUsers(prev => prev.filter(u => u.id.toString() !== userToRemove));
+
+            // If we removed the currently selected/active user, clear selection
+            if (formData.userId === userToRemove) {
+                setFormData(prev => ({ ...prev, userId: "" }));
+            }
+            if (currentAssignedUserId === userToRemove) {
+                setCurrentAssignedUserId(null);
+            }
+
+        } catch (e) {
+            console.error("Failed to remove permission", e);
+            alert("Failed to remove user permission.");
+        } finally {
+            setUserToRemove(null);
         }
     };
 
@@ -319,12 +397,68 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
         };
 
         try {
-            const { createDevice, updateDevice } = await import("@/lib/api");
+            const { createDevice, updateDevice, addPermission, removePermission } = await import("@/lib/api");
+
+            let savedDeviceId = isEditing && initialData?.id ? Number(initialData.id) : null;
+            let resultDevice: any = null;
+
+            // Use 'any' to allow adding driverUniqueId which might be missing from the inferred type
+            const payload: any = { ...finalData };
+
+            // Drivers: Map selected driver ID to UniqueID
+            if (formData.driverId) {
+                const selectedDriver = drivers.find(d => d.id.toString() === formData.driverId?.toString());
+                if (selectedDriver) {
+                    payload.driverUniqueId = selectedDriver.uniqueId;
+                }
+            } else {
+                // Do not send null driverUniqueId unless we are sure.
+                // Traccar API often treats empty string as unset, or omission.
+                // If previously set, we might need to send "".
+                // Safest bet for 'unassign' is often empty string.
+                if (isEditing && (initialData as any)?.driverUniqueId) {
+                    payload.driverUniqueId = "";
+                }
+            }
+
+
 
             if (isEditing && initialData?.id) {
-                await updateDevice(initialData.id, finalData);
+                await updateDevice(initialData.id, payload);
             } else {
-                await createDevice(finalData);
+                resultDevice = await createDevice(payload);
+                savedDeviceId = resultDevice.id;
+            }
+
+
+            // User Assignment (Permissions)
+            const newUserId = formData.userId ? Number(formData.userId) : null;
+            const oldUserId = currentAssignedUserId ? Number(currentAssignedUserId) : null;
+
+            if (savedDeviceId) {
+                // Imports handled above
+
+                // If user changed
+                if (oldUserId && oldUserId !== newUserId) {
+                    const oldUser = users.find(u => u.id === oldUserId);
+                    const shouldKeepOldUser = oldUser && (oldUser.administrator || (oldUser.deviceLimit > 0));
+
+                    if (!shouldKeepOldUser) {
+                        try {
+                            await removePermission({ userId: oldUserId, deviceId: Number(savedDeviceId) });
+                        } catch (e) {
+                            console.warn("Failed to remove old permission", e);
+                        }
+                    }
+                }
+
+                if (newUserId && newUserId !== oldUserId) {
+                    try {
+                        await addPermission({ userId: newUserId, deviceId: Number(savedDeviceId) });
+                    } catch (e) {
+                        console.error("Failed to add new permission", e);
+                    }
+                }
             }
 
             // Assign User / Driver if selected (Separate API calls might be needed if Traccar device endpoint doesn't support direct assignment, but standard Traccar creates permissions separately. Assuming device creation is primary user goal for now. For full flow, permissions APIs would be needed but simplified for now.)
@@ -475,6 +609,28 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                                 </SelectContent>
                                             </Select>
                                         </div>
+                                        {/* Display all assigned users */}
+                                        {assignedUsers.length > 0 && (
+                                            <div className="col-span-2 mt-2">
+                                                <Label className="text-xs font-semibold text-gray-500">Currently Assigned Users:</Label>
+                                                <div className="flex flex-wrap gap-2 mt-1">
+                                                    {assignedUsers.map(u => (
+                                                        <span key={u.id} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 gap-1">
+                                                            {u.name} ({u.email})
+                                                            {!readOnly && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleRemoveUser(u.id.toString())}
+                                                                    className="ml-1 text-blue-600 hover:text-blue-800 focus:outline-none"
+                                                                >
+                                                                    <X className="w-3 h-3" />
+                                                                </button>
+                                                            )}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                         <div className="space-y-2">
                                             <Label htmlFor="driver">Assign Driver</Label>
                                             <Select
@@ -826,6 +982,26 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                     )}
                 </Accordion>
             </Card >
+
+            {/* Confirmation Dialog */}
+            <Dialog open={!!userToRemove} onOpenChange={(open) => !open && setUserToRemove(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Confirm Removal</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to remove this user's access to the vehicle? This action cannot be undone immediately without re-assigning.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setUserToRemove(null)}>
+                            Cancel
+                        </Button>
+                        <Button variant="danger" onClick={confirmRemoveUser}>
+                            Remove User
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div >
     );
 }
