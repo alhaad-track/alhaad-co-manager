@@ -68,6 +68,21 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
     const [assignedUsers, setAssignedUsers] = useState<any[]>([]);
     const [userToRemove, setUserToRemove] = useState<string | null>(null);
 
+    // Registration Details
+    const [registrationNumber, setRegistrationNumber] = useState<string>(() => initialData?.attributes?.registrationNumber || "");
+    const [registrationDate, setRegistrationDate] = useState<string>(() => initialData?.attributes?.registrationDate || "");
+    const [registrationExpiry, setRegistrationExpiry] = useState<string>(() => initialData?.attributes?.registrationExpiry || "");
+
+    // Customer Details
+    const [customerName, setCustomerName] = useState<string>(() => initialData?.attributes?.customerName || "");
+    const [customerPhone, setCustomerPhone] = useState<string>(() => initialData?.attributes?.customerPhone || "");
+    const [customerEmail, setCustomerEmail] = useState<string>(() => initialData?.attributes?.customerEmail || "");
+    const [customerNotes, setCustomerNotes] = useState<string>(() => initialData?.attributes?.customerNotes || "");
+
+    // Vehicle Identity Extras
+    const [vehicleMake, setVehicleMake] = useState<string>(() => initialData?.attributes?.vehicleMake || "");
+    const [vehicleColor, setVehicleColor] = useState<string>(() => initialData?.attributes?.vehicleColor || "");
+
     // Expiration Date State (Standard HTML date input uses YYYY-MM-DD)
     const [expirationDate, setExpirationDate] = useState<string>(() => {
         if (initialData?.expirationTime) {
@@ -379,9 +394,24 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
         // Support Manager
         if (supportManager) {
             attributesObj.supportManager = supportManager;
-        } else {
             delete attributesObj.supportManager;
         }
+
+        // Registration Details
+        if (registrationNumber) attributesObj.registrationNumber = registrationNumber; else delete attributesObj.registrationNumber;
+        if (registrationDate) attributesObj.registrationDate = registrationDate; else delete attributesObj.registrationDate;
+        if (registrationExpiry) attributesObj.registrationExpiry = registrationExpiry; else delete attributesObj.registrationExpiry;
+
+        // Customer Details
+        if (customerName) attributesObj.customerName = customerName; else delete attributesObj.customerName;
+        if (customerPhone) attributesObj.customerPhone = customerPhone; else delete attributesObj.customerPhone;
+        if (customerEmail) attributesObj.customerEmail = customerEmail; else delete attributesObj.customerEmail;
+        if (customerEmail) attributesObj.customerEmail = customerEmail; else delete attributesObj.customerEmail;
+        if (customerNotes) attributesObj.customerNotes = customerNotes; else delete attributesObj.customerNotes;
+
+        // Vehicle Identity Extras
+        if (vehicleMake) attributesObj.vehicleMake = vehicleMake; else delete attributesObj.vehicleMake;
+        if (vehicleColor) attributesObj.vehicleColor = vehicleColor; else delete attributesObj.vehicleColor;
 
         const finalData = {
             id: isEditing && initialData?.id ? Number(initialData.id) : -1,
@@ -523,6 +553,26 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                                 onChange={(e) => setFormData({ ...formData, model: e.target.value })}
                                                 required
                                                 placeholder="Volvo FH16"
+                                                disabled={readOnly}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="make">Make</Label>
+                                            <Input
+                                                id="make"
+                                                value={vehicleMake}
+                                                onChange={(e) => setVehicleMake(e.target.value)}
+                                                placeholder="Volvo"
+                                                disabled={readOnly}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="color">Color</Label>
+                                            <Input
+                                                id="color"
+                                                value={vehicleColor}
+                                                onChange={(e) => setVehicleColor(e.target.value)}
+                                                placeholder="White"
                                                 disabled={readOnly}
                                             />
                                         </div>
@@ -693,6 +743,96 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                                 disabled={readOnly}
                                             />
                                         </div>
+                                    </div>
+                                </div>
+
+                                {/* Group: Registration Details */}
+                                <div className="space-y-4 border rounded-lg p-4 bg-gray-50/50">
+                                    <h3 className="font-semibold text-gray-700 flex items-center gap-2">
+                                        <CardTitle className="text-base">Registration Details</CardTitle>
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="registrationNumber">Registration Number</Label>
+                                            <Input
+                                                id="registrationNumber"
+                                                value={registrationNumber}
+                                                onChange={(e) => setRegistrationNumber(e.target.value)}
+                                                placeholder="e.g. ABC-123"
+                                                disabled={readOnly}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="registrationDate">Registration Date</Label>
+                                            <Input
+                                                id="registrationDate"
+                                                type="date"
+                                                value={registrationDate}
+                                                onChange={(e) => setRegistrationDate(e.target.value)}
+                                                disabled={readOnly}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="registrationExpiry">Registration Expiry</Label>
+                                            <Input
+                                                id="registrationExpiry"
+                                                type="date"
+                                                value={registrationExpiry}
+                                                onChange={(e) => setRegistrationExpiry(e.target.value)}
+                                                disabled={readOnly}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Group: Customer Information */}
+                                <div className="space-y-4 border rounded-lg p-4 bg-gray-50/50">
+                                    <h3 className="font-semibold text-gray-700 flex items-center gap-2">
+                                        <User className="w-4 h-4" /> Customer Information
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="customerName">Customer Name</Label>
+                                            <Input
+                                                id="customerName"
+                                                value={customerName}
+                                                onChange={(e) => setCustomerName(e.target.value)}
+                                                placeholder="Full Name / Company"
+                                                disabled={readOnly}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="customerPhone">Customer Phone</Label>
+                                            <Input
+                                                id="customerPhone"
+                                                value={customerPhone}
+                                                onChange={(e) => setCustomerPhone(e.target.value)}
+                                                placeholder="+123456789"
+                                                disabled={readOnly}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="customerEmail">Customer Email</Label>
+                                            <Input
+                                                id="customerEmail"
+                                                type="email"
+                                                value={customerEmail}
+                                                onChange={(e) => setCustomerEmail(e.target.value)}
+                                                placeholder="email@example.com"
+                                                disabled={readOnly}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="customerNotes">Notes / Address</Label>
+                                        <textarea
+                                            id="customerNotes"
+                                            className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                            value={customerNotes}
+                                            onChange={(e) => setCustomerNotes(e.target.value)}
+                                            placeholder="Additional details..."
+                                            disabled={readOnly}
+                                        />
                                     </div>
                                 </div>
 
