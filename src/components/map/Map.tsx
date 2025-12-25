@@ -14,9 +14,10 @@ interface MapProps {
     vehicles: Vehicle[];
     selectedVehicle?: Vehicle | null;
     onSelectVehicle?: (vehicle: Vehicle) => void;
+    onDoubleClickVehicle?: (vehicle: Vehicle) => void;
     livePath?: TripPoint[];
 }
 
-export default function Map({ vehicles, selectedVehicle, onSelectVehicle, livePath }: MapProps) {
-    return <MapComponent vehicles={vehicles} selectedVehicle={selectedVehicle} onSelectVehicle={onSelectVehicle} livePath={livePath} />;
+export default function Map({ vehicles, selectedVehicle, onSelectVehicle, onDoubleClickVehicle, livePath }: MapProps) {
+    return <MapComponent vehicles={vehicles} selectedVehicle={selectedVehicle} onSelectVehicle={onSelectVehicle} onDoubleClickVehicle={onDoubleClickVehicle} livePath={livePath} />;
 }

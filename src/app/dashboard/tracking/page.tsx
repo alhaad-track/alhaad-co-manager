@@ -200,8 +200,68 @@ export default function TrackingPage() {
     });
 
     const handleSelectVehicle = (vehicle: Vehicle) => {
-        setSelectedVehicle(vehicle);
+        if (selectedVehicle?.id === vehicle.id) {
+            setSelectedVehicle(null); // Deselect/Clear if already selected
+            // Clear path from state to prevent flash next time
+            setVehiclePaths(prev => {
+                const newPaths = { ...prev };
+                delete newPaths[vehicle.id];
+                return newPaths;
+            });
+        } else {
+            // Clear any stale path for this vehicle before selecting
+            setVehiclePaths(prev => {
+                const newPaths = { ...prev };
+                delete newPaths[vehicle.id];
+                return newPaths;
+            });
+            setSelectedVehicle(vehicle);
+        }
         setIsMobileListOpen(false);
+    };
+
+    const handleDoubleClickVehicle = async (vehicle: Vehicle) => {
+        // Fetch full trip for today
+        try {
+            // Set start of today
+            const now = new Date();
+            const from = new Date(now);
+            from.setHours(0, 0, 0, 0); // Start of day
+
+            const to = new Date(); // Now
+
+            const params = new URLSearchParams({
+                deviceId: vehicle.id,
+                from: from.toISOString(),
+                to: to.toISOString()
+            });
+
+            const route = await getRoute(params);
+            if (route && Array.isArray(route)) {
+                // Map to TripPoint
+                const historyPath: TripPoint[] = route.map((p: any) => ({
+                    latitude: p.latitude,
+                    longitude: p.longitude,
+                    speed: p.speed,
+                    course: p.course,
+                    fixTime: p.fixTime
+                }));
+
+                setVehiclePaths(prev => {
+                    return {
+                        ...prev,
+                        [vehicle.id]: historyPath
+                    };
+                });
+
+                // Also ensure vehicle is selected
+                if (selectedVehicle?.id !== vehicle.id) {
+                    setSelectedVehicle(vehicle);
+                }
+            }
+        } catch (e) {
+            console.error("Failed to load full day history", e);
+        }
     };
 
     return (
@@ -217,6 +277,7 @@ export default function TrackingPage() {
                         vehicles={vehicles}
                         selectedVehicle={selectedVehicle}
                         onSelectVehicle={handleSelectVehicle}
+                        onDoubleClickVehicle={handleDoubleClickVehicle}
                         livePath={selectedVehicle ? vehiclePaths[selectedVehicle.id] : undefined}
                     />
                 </div>

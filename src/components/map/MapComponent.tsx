@@ -184,7 +184,7 @@ const createVehicleIcon = (type: string, category?: string) => {
 };
 
 // Smoothly moving marker
-const MovingMarker = ({ position, icon, children, onSelect }: { position: [number, number], icon: L.DivIcon, children: React.ReactNode, onSelect?: () => void }) => {
+const MovingMarker = ({ position, icon, children, onSelect, onDoubleClick }: { position: [number, number], icon: L.DivIcon, children: React.ReactNode, onSelect?: () => void, onDoubleClick?: () => void }) => {
     const markerRef = useRef<L.Marker>(null);
     // We only pass the initial position to the Marker component to prevent React Leaflet from forcing updates.
     // We handle all position updates manually via setLatLng for animation.
@@ -252,6 +252,9 @@ const MovingMarker = ({ position, icon, children, onSelect }: { position: [numbe
         }
     }, [icon]);
 
+    // Click handling with debounce to separate click vs dblclick
+    const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
     return (
         <Marker
             ref={markerRef}
@@ -259,7 +262,23 @@ const MovingMarker = ({ position, icon, children, onSelect }: { position: [numbe
             icon={icon}
             eventHandlers={{
                 click: () => {
-                    if (onSelect) onSelect();
+                    if (clickTimeoutRef.current) {
+                        clearTimeout(clickTimeoutRef.current);
+                        clickTimeoutRef.current = null;
+                        return;
+                    }
+
+                    clickTimeoutRef.current = setTimeout(() => {
+                        if (onSelect) onSelect();
+                        clickTimeoutRef.current = null;
+                    }, 300);
+                },
+                dblclick: () => {
+                    if (clickTimeoutRef.current) {
+                        clearTimeout(clickTimeoutRef.current);
+                        clickTimeoutRef.current = null;
+                    }
+                    if (onDoubleClick) onDoubleClick();
                 }
             }}
         >
@@ -268,7 +287,15 @@ const MovingMarker = ({ position, icon, children, onSelect }: { position: [numbe
     );
 };
 
-export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicle, livePath }: MapComponentProps) {
+export interface MapComponentProps {
+    vehicles: Vehicle[];
+    selectedVehicle?: Vehicle | null;
+    onSelectVehicle?: (vehicle: Vehicle) => void;
+    onDoubleClickVehicle?: (vehicle: Vehicle) => void;
+    livePath?: TripPoint[];
+}
+
+export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicle, onDoubleClickVehicle, livePath }: MapComponentProps) {
     const selectedTrip = selectedVehicle ? mockTripPaths[selectedVehicle.id] : null;
     const [zoom, setZoom] = useState(13); // Default zoom
 
@@ -304,14 +331,14 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
 
     // Filter points based on zoom level (Distance in meters)
     const getMinDistance = (z: number) => {
-        if (z < 10) return 20000; // 20km
-        if (z < 12) return 5000;  // 5km
-        if (z < 13) return 2000;  // 2km
-        if (z < 14) return 1000;  // 1km
-        if (z < 15) return 500;   // 500m
-        if (z < 16) return 200;   // 200m
-        if (z < 17) return 100;   // 100m
-        return 50;                // 50m min distance at highest zoom
+        if (z < 10) return 50000; // 50km
+        if (z < 12) return 10000; // 10km
+        if (z < 13) return 5000;  // 5km
+        if (z < 14) return 2000;  // 2km
+        if (z < 15) return 1000;  // 1km
+        if (z < 16) return 500;   // 500m
+        if (z < 17) return 200;   // 200m
+        return 100;               // 100m min distance at highest zoom
     };
 
     // Haversine formula for distance
@@ -335,13 +362,45 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
     const visiblePoints = (() => {
         if (!livePath || livePath.length === 0) return [];
 
+        const latestPoint = livePath[livePath.length - 1];
+        const latestTime = latestPoint.fixTime ? new Date(latestPoint.fixTime).getTime() : Date.now();
+        const oneHourMs = 60 * 60 * 1000;
+        const stationaryThreshold = 100; // Increased to 100 meters to be more aggressive
+
+        // Check if vehicle has been effectively stationary for the last hour
+        // We check if the maximum distance from the latest point in the last hour is small
+        let isStationaryForLastHour = false;
+        let maxDist = 0;
+
+        // Scan backwards to find max deviation in last hour
+        for (let i = livePath.length - 1; i >= 0; i--) {
+            const p = livePath[i];
+            const pTime = p.fixTime ? new Date(p.fixTime).getTime() : 0;
+            if (latestTime - pTime > oneHourMs) break;
+
+            const d = calculateDistance(p.latitude, p.longitude, latestPoint.latitude, latestPoint.longitude);
+            if (d > maxDist) maxDist = d;
+        }
+
+        if (maxDist < stationaryThreshold) {
+            isStationaryForLastHour = true;
+        }
+
         const points: TripPoint[] = [];
         let lastPoint: TripPoint | null = null;
 
         for (let i = 0; i < livePath.length; i++) {
             const point = livePath[i];
 
-            // Always include the last point
+            // Stationary Filter: If stationary for last hour, hide points from that hour
+            if (isStationaryForLastHour) {
+                const pTime = point.fixTime ? new Date(point.fixTime).getTime() : 0;
+                if (latestTime - pTime < oneHourMs) {
+                    continue;
+                }
+            }
+
+            // Always include the last point (Unless it was filtered out by stationary check above)
             if (i === livePath.length - 1) {
                 points.push(point);
                 continue;
@@ -495,6 +554,11 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
                     onSelect={() => {
                         if (onSelectVehicle) {
                             onSelectVehicle(vehicle);
+                        }
+                    }}
+                    onDoubleClick={() => {
+                        if (onDoubleClickVehicle) {
+                            onDoubleClickVehicle(vehicle);
                         }
                     }}
                 >
