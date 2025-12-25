@@ -14,6 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import TripHistory from "./TripHistory";
 import TripMap from "@/components/map/TripMap";
+import { useStore } from "@/context/StoreContext";
 import {
     Dialog,
     DialogContent,
@@ -94,32 +95,8 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
         return nextYear.toISOString().split('T')[0];
     });
 
-    // Fetched Lists
-    const [users, setUsers] = useState<any[]>([]);
-    const [drivers, setDrivers] = useState<any[]>([]);
-    const [availableGeofences, setAvailableGeofences] = useState<any[]>([]);
-
-    useEffect(() => {
-        const fetchResources = async () => {
-            try {
-                const { getGeofences, getUsers, getDrivers } = await import("@/lib/api");
-                const [geofencesData, usersData, driversData] = await Promise.all([
-                    getGeofences(),
-                    getUsers(),
-                    getDrivers()
-                ]);
-
-                setAvailableGeofences(geofencesData || []);
-                setUsers(usersData || []);
-                setDrivers(driversData || []);
-            } catch (err) {
-                console.error("Failed to fetch resources", err);
-                setAvailableGeofences(initialGeofences);
-                // Ideally show error toast
-            }
-        };
-        fetchResources();
-    }, []);
+    // Fetched Lists from Store
+    const { users, drivers, geofences: availableGeofences } = useStore();
 
     // Fetch initial permissions and match driver
     useEffect(() => {

@@ -7,6 +7,7 @@ import Link from "next/link";
 import { Users, Car, Map, LogOut, LayoutDashboard, Hexagon, User, Bell, FileText, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { StoreProvider } from "@/context/StoreContext";
 
 export default function DashboardLayout({
     children,
@@ -92,36 +93,38 @@ export default function DashboardLayout({
     );
 
     return (
-        <div className="min-h-screen bg-gray-100 flex flex-col md:flex-row">
-            {/* Mobile Header */}
-            <div className="md:hidden bg-white border-b border-gray-200 p-4 flex items-center justify-start gap-4 sticky top-0 z-20">
-                <Sheet open={open} onOpenChange={setOpen}>
-                    <SheetTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                            <Menu className="w-6 h-6" />
-                        </Button>
-                    </SheetTrigger>
-                    <SheetContent side="left" className="p-0 w-72">
-                        <SidebarContent />
-                    </SheetContent>
-                </Sheet>
-                <div className="flex items-center gap-2 font-bold text-orange-600">
-                    <Car className="w-6 h-6" />
-                    Alhaad Track
+        <StoreProvider>
+            <div className="min-h-screen bg-gray-100 flex flex-col md:flex-row">
+                {/* Mobile Header */}
+                <div className="md:hidden bg-white border-b border-gray-200 p-4 flex items-center justify-start gap-4 sticky top-0 z-20">
+                    <Sheet open={open} onOpenChange={setOpen}>
+                        <SheetTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                                <Menu className="w-6 h-6" />
+                            </Button>
+                        </SheetTrigger>
+                        <SheetContent side="left" className="p-0 w-72">
+                            <SidebarContent />
+                        </SheetContent>
+                    </Sheet>
+                    <div className="flex items-center gap-2 font-bold text-orange-600">
+                        <Car className="w-6 h-6" />
+                        Alhaad Track
+                    </div>
                 </div>
+
+                {/* Desktop Sidebar */}
+                <aside className="hidden md:flex w-64 bg-white border-r border-gray-200 flex-col h-screen sticky top-0">
+                    <SidebarContent />
+                </aside>
+
+                {/* Main Content */}
+                <main className="flex-1 overflow-auto h-[calc(100vh-65px)] md:h-screen">
+                    <div className="p-4 md:p-8">
+                        {children}
+                    </div>
+                </main>
             </div>
-
-            {/* Desktop Sidebar */}
-            <aside className="hidden md:flex w-64 bg-white border-r border-gray-200 flex-col h-screen sticky top-0">
-                <SidebarContent />
-            </aside>
-
-            {/* Main Content */}
-            <main className="flex-1 overflow-auto h-[calc(100vh-65px)] md:h-screen">
-                <div className="p-4 md:p-8">
-                    {children}
-                </div>
-            </main>
-        </div>
+        </StoreProvider>
     );
 }
