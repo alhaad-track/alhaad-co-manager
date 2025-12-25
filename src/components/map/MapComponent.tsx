@@ -302,18 +302,65 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
     // Determine path for default display fallback
     const pathCoordinates = selectedTrip ? selectedTrip.path : [];
 
-    // Filter points based on zoom level
-    const getStep = (z: number) => {
-        if (z < 10) return 40;
-        if (z < 12) return 30;
-        if (z < 14) return 15;
-        if (z < 16) return 8;
-        return 1;
+    // Filter points based on zoom level (Distance in meters)
+    const getMinDistance = (z: number) => {
+        if (z < 10) return 20000; // 20km
+        if (z < 12) return 5000;  // 5km
+        if (z < 13) return 2000;  // 2km
+        if (z < 14) return 1000;  // 1km
+        if (z < 15) return 500;   // 500m
+        if (z < 16) return 200;   // 200m
+        if (z < 17) return 100;   // 100m
+        return 50;                // 50m min distance at highest zoom
     };
 
-    const step = getStep(zoom);
-    // If we have livePath, ensure the very last point is always included so the connection to the vehicle is clear
-    const visiblePoints = livePath ? livePath.filter((_, i) => i % step === 0 || i === livePath.length - 1) : [];
+    // Haversine formula for distance
+    const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+        const R = 6371e3; // metres
+        const φ1 = lat1 * Math.PI / 180;
+        const φ2 = lat2 * Math.PI / 180;
+        const Δφ = (lat2 - lat1) * Math.PI / 180;
+        const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+        const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+        return R * c;
+    };
+
+    const minDistance = getMinDistance(zoom);
+
+    const visiblePoints = (() => {
+        if (!livePath || livePath.length === 0) return [];
+
+        const points: TripPoint[] = [];
+        let lastPoint: TripPoint | null = null;
+
+        for (let i = 0; i < livePath.length; i++) {
+            const point = livePath[i];
+
+            // Always include the last point
+            if (i === livePath.length - 1) {
+                points.push(point);
+                continue;
+            }
+
+            if (!lastPoint) {
+                points.push(point);
+                lastPoint = point;
+                continue;
+            }
+
+            const dist = calculateDistance(lastPoint.latitude, lastPoint.longitude, point.latitude, point.longitude);
+            if (dist >= minDistance) {
+                points.push(point);
+                lastPoint = point;
+            }
+        }
+        return points;
+    })();
 
     return (
         <MapContainer center={[51.505, -0.09]} zoom={13} style={{ height: "100%", width: "100%" }}>
