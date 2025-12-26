@@ -55,7 +55,7 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
         attributes: initialData?.attributes || {}
     });
 
-    // Specific Attribute States (managed separately for UI convenience, merged into attributes on submit)
+    // specific attributes state
     const [speedLimitKmh, setSpeedLimitKmh] = useState<string>(() => {
         const knots = initialData?.attributes?.speedLimit;
         return knots ? Math.round(knots * 1.852).toString() : "";
@@ -84,27 +84,28 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
     const [vehicleMake, setVehicleMake] = useState<string>(() => initialData?.attributes?.vehicleMake || "");
     const [vehicleColor, setVehicleColor] = useState<string>(() => initialData?.attributes?.vehicleColor || "");
 
-    // Expiration Date State (Standard HTML date input uses YYYY-MM-DD)
+    // Expiration Date
     const [expirationDate, setExpirationDate] = useState<string>(() => {
         if (initialData?.expirationTime) {
             return new Date(initialData.expirationTime).toISOString().split('T')[0];
         }
-        // Default to 1 year from now for new vehicles
         const nextYear = new Date();
         nextYear.setFullYear(nextYear.getFullYear() + 1);
         return nextYear.toISOString().split('T')[0];
     });
 
-    // Fetched Lists from Store
+    // Fetched Lists
     const { users, drivers, geofences: availableGeofences } = useStore();
 
-    // Fetch initial permissions and match driver
+    // -- VALIDATION HELPERS --
+    const cleanPhone = (val: string) => val.replace(/[^0-9+]/g, "").slice(0, 15);
+    const cleanAlphanumeric = (val: string) => val.replace(/[^a-zA-Z0-9]/g, ""); // Optional strictness, Traccar UniqueID is usually implied alphanumeric
+
     useEffect(() => {
         const initData = async () => {
             if (initialData?.id) {
                 try {
                     const { getUsers } = await import("@/lib/api");
-                    // Using getUsers with deviceId query to check assignment
                     const linkedUsers = await getUsers(`deviceId=${initialData.id}`);
 
                     if (linkedUsers && linkedUsers.length > 0) {
@@ -125,7 +126,6 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
         initData();
     }, [isEditing, initialData?.id]);
 
-    // Match driver from uniqueId if driverId is missing
     useEffect(() => {
         if ((initialData as any)?.uniqueId && drivers.length > 0 && !formData.driverId && (initialData as any).driverUniqueId) {
             const d = drivers.find(d => d.uniqueId === (initialData as any).driverUniqueId);
@@ -136,23 +136,19 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
     }, [drivers, initialData]);
 
     const [accordionValue, setAccordionValue] = useState("details");
-    const [trips, setTrips] = useState<any[]>([]); // Using any[] to match TripHistory props if we cast or map
+    const [trips, setTrips] = useState<any[]>([]);
     const [loadingTrips, setLoadingTrips] = useState(false);
     const [tripsError, setTripsError] = useState<string | null>(null);
     const [tripsFetched, setTripsFetched] = useState(false);
 
-    // State for viewing trip route
     const [selectedTripRoute, setSelectedTripRoute] = useState<any[] | null>(null);
     const [selectedTripDetails, setSelectedTripDetails] = useState<any>(null);
     const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
     const [mapCollapsed, setMapCollapsed] = useState(false);
     const [loadingRoute, setLoadingRoute] = useState(false);
 
-    // State for current position address
     const [currentAddress, setCurrentAddress] = useState<string | null>(null);
     const [loadingAddress, setLoadingAddress] = useState(false);
-
-
 
     const handleAccordionChange = (val: string) => {
         setAccordionValue(val);
@@ -165,13 +161,13 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
         setLoadingRoute(true);
         setSelectedTripRoute(null);
         setSelectedTripId(trip.id);
-        setMapCollapsed(false); // Auto-expand when selecting a new trip
+        setMapCollapsed(false);
         try {
             const { getRoute, reverseGeocode } = await import("@/lib/api");
 
             const params = new URLSearchParams({
                 deviceId: trip.vehicleId,
-                from: trip.rawStartTime || new Date().toISOString(), // Fallback if missing
+                from: trip.rawStartTime || new Date().toISOString(),
                 to: trip.rawEndTime || new Date().toISOString()
             });
 
@@ -181,7 +177,6 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
             let startAddress = trip.startLocation;
             let endAddress = trip.endLocation;
 
-            // Resolve addresses if missing
             if (!startAddress || startAddress === "Unknown Location") {
                 if (trip.startLat && trip.startLon) {
                     try {
@@ -209,7 +204,6 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                 endTime: trip.endTime
             });
 
-            // Scroll to map
             if (mapRef.current) {
                 mapRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
@@ -246,10 +240,8 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
             const { removePermission } = await import("@/lib/api");
             await removePermission({ userId: Number(userToRemove), deviceId: Number(initialData?.id) });
 
-            // Update state
             setAssignedUsers(prev => prev.filter(u => u.id.toString() !== userToRemove));
 
-            // If we removed the currently selected/active user, clear selection
             if (formData.userId === userToRemove) {
                 setFormData(prev => ({ ...prev, userId: "" }));
             }
@@ -285,11 +277,10 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
             const tripsData = await getTrips(tripParams);
 
             if (Array.isArray(tripsData)) {
-                // Map API data to Trip interface expected by TripHistory
                 const mappedTrips = tripsData.map((t: any) => ({
                     id: t.id ? t.id.toString() : Math.random().toString(),
                     vehicleId: deviceId,
-                    startLocation: t.startAddress || (t.startLat && t.startLon ? "" : "Unknown Location"), // Leave empty if coords exist but address is missing, to trigger "Show Address" logic if we treat empty/null as missing
+                    startLocation: t.startAddress || (t.startLat && t.startLon ? "" : "Unknown Location"),
                     endLocation: t.endAddress || (t.endLat && t.endLon ? "" : "Unknown Location"),
                     startTime: t.startTime ? new Date(t.startTime).toLocaleString() : "-",
                     endTime: t.endTime ? new Date(t.endTime).toLocaleString() : "-",
@@ -328,27 +319,22 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
         e.preventDefault();
         setIsLoading(true);
 
-        // Simulate API call
         await new Promise(resolve => setTimeout(resolve, 1000));
 
-        // Merge specific fields into attributes
         const attributesObj: Record<string, any> = { ...formData.attributes };
 
-        // Speed Limit (convert km/h to knots)
         if (speedLimitKmh) {
             attributesObj.speedLimit = Number(speedLimitKmh) / 1.852;
         } else {
             delete attributesObj.speedLimit;
         }
 
-        // Fuel Drop Threshold
         if (fuelDropThreshold) {
             attributesObj.fuelDropThreshold = Number(fuelDropThreshold);
         } else {
             delete attributesObj.fuelDropThreshold;
         }
 
-        // Device Password
         if (devicePassword) {
             attributesObj.devicePassword = devicePassword;
         } else {
@@ -361,32 +347,26 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
             delete attributesObj["processing.copyAttributes"];
         }
 
-        // Sale Ref
         if (saleRef) {
             attributesObj.saleRef = saleRef;
         } else {
             delete attributesObj.saleRef;
         }
 
-        // Support Manager
         if (supportManager) {
             attributesObj.supportManager = supportManager;
             delete attributesObj.supportManager;
         }
 
-        // Registration Details
         if (registrationNumber) attributesObj.registrationNumber = registrationNumber; else delete attributesObj.registrationNumber;
         if (registrationDate) attributesObj.registrationDate = registrationDate; else delete attributesObj.registrationDate;
         if (registrationExpiry) attributesObj.registrationExpiry = registrationExpiry; else delete attributesObj.registrationExpiry;
 
-        // Customer Details
         if (customerName) attributesObj.customerName = customerName; else delete attributesObj.customerName;
         if (customerPhone) attributesObj.customerPhone = customerPhone; else delete attributesObj.customerPhone;
         if (customerEmail) attributesObj.customerEmail = customerEmail; else delete attributesObj.customerEmail;
-        if (customerEmail) attributesObj.customerEmail = customerEmail; else delete attributesObj.customerEmail;
         if (customerNotes) attributesObj.customerNotes = customerNotes; else delete attributesObj.customerNotes;
 
-        // Vehicle Identity Extras
         if (vehicleMake) attributesObj.vehicleMake = vehicleMake; else delete attributesObj.vehicleMake;
         if (vehicleColor) attributesObj.vehicleColor = vehicleColor; else delete attributesObj.vehicleColor;
 
@@ -409,26 +389,18 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
             let savedDeviceId = isEditing && initialData?.id ? Number(initialData.id) : null;
             let resultDevice: any = null;
 
-            // Use 'any' to allow adding driverUniqueId which might be missing from the inferred type
             const payload: any = { ...finalData };
 
-            // Drivers: Map selected driver ID to UniqueID
             if (formData.driverId) {
                 const selectedDriver = drivers.find(d => d.id.toString() === formData.driverId?.toString());
                 if (selectedDriver) {
                     payload.driverUniqueId = selectedDriver.uniqueId;
                 }
             } else {
-                // Do not send null driverUniqueId unless we are sure.
-                // Traccar API often treats empty string as unset, or omission.
-                // If previously set, we might need to send "".
-                // Safest bet for 'unassign' is often empty string.
                 if (isEditing && (initialData as any)?.driverUniqueId) {
                     payload.driverUniqueId = "";
                 }
             }
-
-
 
             if (isEditing && initialData?.id) {
                 await updateDevice(initialData.id, payload);
@@ -437,15 +409,10 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                 savedDeviceId = resultDevice.id;
             }
 
-
-            // User Assignment (Permissions)
             const newUserId = formData.userId ? Number(formData.userId) : null;
             const oldUserId = currentAssignedUserId ? Number(currentAssignedUserId) : null;
 
             if (savedDeviceId) {
-                // Imports handled above
-
-                // If user changed
                 if (oldUserId && oldUserId !== newUserId) {
                     const oldUser = users.find(u => u.id === oldUserId);
                     const shouldKeepOldUser = oldUser && (oldUser.administrator || (oldUser.deviceLimit > 0));
@@ -468,12 +435,9 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                 }
             }
 
-            // Assign User / Driver if selected (Separate API calls might be needed if Traccar device endpoint doesn't support direct assignment, but standard Traccar creates permissions separately. Assuming device creation is primary user goal for now. For full flow, permissions APIs would be needed but simplified for now.)
-
             router.push("/dashboard/vehicles");
         } catch (error) {
             console.error("Failed to save vehicle", error);
-            // Ideally show error toast here
             alert("Failed to save vehicle. Please check your inputs and connection.");
         } finally {
             setIsLoading(false);
@@ -493,18 +457,14 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                 </h1>
             </div>
 
-
-
             <Card className="w-full max-w-5xl mx-auto border-0 shadow-none bg-transparent">
                 <Accordion type="single" collapsible value={accordionValue} onValueChange={handleAccordionChange} className="w-full space-y-4">
                     <AccordionItem value="details" className="border rounded-lg bg-white px-6">
-                        {/* ... existing details ... */}
                         <AccordionTrigger className="hover:no-underline py-6">
                             <span className="text-xl font-semibold">Vehicle Details</span>
                         </AccordionTrigger>
                         <AccordionContent>
                             <form onSubmit={handleSubmit} className="space-y-6 pt-2">
-                                {/* ... form content ... */}
                                 {/* Group 1: Identity & Status */}
                                 <div className="space-y-4 border rounded-lg p-4 bg-gray-50/50">
                                     <h3 className="font-semibold text-gray-700 flex items-center gap-2">
@@ -512,10 +472,13 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                     </h3>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
-                                            <Label htmlFor="name">Vehicle Name</Label>
+                                            <Label htmlFor="name">
+                                                Vehicle Name <span className="text-red-500">*</span>
+                                            </Label>
                                             <Input
                                                 id="name"
                                                 value={formData.name}
+                                                maxLength={50}
                                                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                                                 required
                                                 placeholder="Truck 001"
@@ -523,38 +486,48 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label htmlFor="model">Model</Label>
+                                            <Label htmlFor="model">
+                                                Model <span className="text-xs text-muted-foreground font-normal ml-1">(Optional)</span>
+                                            </Label>
                                             <Input
                                                 id="model"
                                                 value={formData.model}
+                                                maxLength={50}
                                                 onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                                                required
                                                 placeholder="Volvo FH16"
                                                 disabled={readOnly}
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label htmlFor="make">Make</Label>
+                                            <Label htmlFor="make">
+                                                Make <span className="text-xs text-muted-foreground font-normal ml-1">(Optional)</span>
+                                            </Label>
                                             <Input
                                                 id="make"
                                                 value={vehicleMake}
+                                                maxLength={50}
                                                 onChange={(e) => setVehicleMake(e.target.value)}
                                                 placeholder="Volvo"
                                                 disabled={readOnly}
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label htmlFor="color">Color</Label>
+                                            <Label htmlFor="color">
+                                                Color <span className="text-xs text-muted-foreground font-normal ml-1">(Optional)</span>
+                                            </Label>
                                             <Input
                                                 id="color"
                                                 value={vehicleColor}
+                                                maxLength={50}
                                                 onChange={(e) => setVehicleColor(e.target.value)}
                                                 placeholder="White"
                                                 disabled={readOnly}
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label htmlFor="category">Category</Label>
+                                            <Label htmlFor="category">
+                                                Category <span className="text-xs text-muted-foreground font-normal ml-1">(Optional)</span>
+                                            </Label>
                                             <Select
                                                 value={formData.category || "default"}
                                                 onValueChange={(value) => setFormData({ ...formData, category: value })}
@@ -586,7 +559,9 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                             </Select>
                                         </div>
                                         <div className="space-y-2">
-                                            <Label htmlFor="expiration">Expiration Date (Account Validity)</Label>
+                                            <Label htmlFor="expiration">
+                                                Expiration Date <span className="text-xs text-muted-foreground font-normal ml-1">(Optional)</span>
+                                            </Label>
                                             <Input
                                                 id="expiration"
                                                 type="date"
@@ -619,7 +594,9 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                     </h3>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
-                                            <Label htmlFor="user">Assign to User</Label>
+                                            <Label htmlFor="user">
+                                                Assign to User <span className="text-xs text-muted-foreground font-normal ml-1">(Optional)</span>
+                                            </Label>
                                             <Select
                                                 value={formData.userId}
                                                 onValueChange={(value) => setFormData({ ...formData, userId: value })}
@@ -659,7 +636,9 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                             </div>
                                         )}
                                         <div className="space-y-2">
-                                            <Label htmlFor="driver">Assign Driver</Label>
+                                            <Label htmlFor="driver">
+                                                Assign Driver <span className="text-xs text-muted-foreground font-normal ml-1">(Optional)</span>
+                                            </Label>
                                             <Select
                                                 value={formData.driverId}
                                                 onValueChange={(value) => setFormData({ ...formData, driverId: value === "unassigned" ? undefined : value })}
@@ -679,42 +658,54 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                             </Select>
                                         </div>
                                         <div className="space-y-2">
-                                            <Label htmlFor="saleRef">Sale Ref (Person/ID)</Label>
+                                            <Label htmlFor="saleRef">
+                                                Sale Ref (Person/ID) <span className="text-xs text-muted-foreground font-normal ml-1">(Optional)</span>
+                                            </Label>
                                             <Input
                                                 id="saleRef"
                                                 type="text"
                                                 value={saleRef}
+                                                maxLength={50}
                                                 onChange={(e) => setSaleRef(e.target.value)}
                                                 placeholder="e.g. Sales-101"
                                                 disabled={readOnly}
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label htmlFor="supportManager">Support Manager</Label>
+                                            <Label htmlFor="supportManager">
+                                                Support Manager <span className="text-xs text-muted-foreground font-normal ml-1">(Optional)</span>
+                                            </Label>
                                             <Input
                                                 id="supportManager"
                                                 type="text"
                                                 value={supportManager}
+                                                maxLength={50}
                                                 onChange={(e) => setSupportManager(e.target.value)}
                                                 placeholder="e.g. John Doe"
                                                 disabled={readOnly}
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label htmlFor="phone">Phone Number</Label>
+                                            <Label htmlFor="phone">
+                                                Phone Number <span className="text-xs text-muted-foreground font-normal ml-1">(Optional)</span>
+                                            </Label>
                                             <Input
                                                 id="phone"
                                                 value={formData.phone}
-                                                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                                maxLength={15}
+                                                onChange={(e) => setFormData({ ...formData, phone: cleanPhone(e.target.value) })}
                                                 placeholder="+123456789"
                                                 disabled={readOnly}
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label htmlFor="contact">Contact Info</Label>
+                                            <Label htmlFor="contact">
+                                                Contact Info <span className="text-xs text-muted-foreground font-normal ml-1">(Optional)</span>
+                                            </Label>
                                             <Input
                                                 id="contact"
                                                 value={formData.contact}
+                                                maxLength={50}
                                                 onChange={(e) => setFormData({ ...formData, contact: e.target.value })}
                                                 placeholder="Owner Name / Support"
                                                 disabled={readOnly}
@@ -730,17 +721,22 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                     </h3>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         <div className="space-y-2">
-                                            <Label htmlFor="registrationNumber">Registration Number</Label>
+                                            <Label htmlFor="registrationNumber">
+                                                Registration Number <span className="text-xs text-muted-foreground font-normal ml-1">(Optional)</span>
+                                            </Label>
                                             <Input
                                                 id="registrationNumber"
                                                 value={registrationNumber}
+                                                maxLength={50}
                                                 onChange={(e) => setRegistrationNumber(e.target.value)}
                                                 placeholder="e.g. ABC-123"
                                                 disabled={readOnly}
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label htmlFor="registrationDate">Registration Date</Label>
+                                            <Label htmlFor="registrationDate">
+                                                Registration Date <span className="text-xs text-muted-foreground font-normal ml-1">(Optional)</span>
+                                            </Label>
                                             <Input
                                                 id="registrationDate"
                                                 type="date"
@@ -750,7 +746,9 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label htmlFor="registrationExpiry">Registration Expiry</Label>
+                                            <Label htmlFor="registrationExpiry">
+                                                Registration Expiry <span className="text-xs text-muted-foreground font-normal ml-1">(Optional)</span>
+                                            </Label>
                                             <Input
                                                 id="registrationExpiry"
                                                 type="date"
@@ -769,31 +767,40 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                     </h3>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="space-y-2">
-                                            <Label htmlFor="customerName">Customer Name</Label>
+                                            <Label htmlFor="customerName">
+                                                Customer Name <span className="text-xs text-muted-foreground font-normal ml-1">(Optional)</span>
+                                            </Label>
                                             <Input
                                                 id="customerName"
                                                 value={customerName}
+                                                maxLength={50}
                                                 onChange={(e) => setCustomerName(e.target.value)}
                                                 placeholder="Full Name / Company"
                                                 disabled={readOnly}
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label htmlFor="customerPhone">Customer Phone</Label>
+                                            <Label htmlFor="customerPhone">
+                                                Customer Phone <span className="text-xs text-muted-foreground font-normal ml-1">(Optional)</span>
+                                            </Label>
                                             <Input
                                                 id="customerPhone"
                                                 value={customerPhone}
-                                                onChange={(e) => setCustomerPhone(e.target.value)}
+                                                maxLength={15}
+                                                onChange={(e) => setCustomerPhone(cleanPhone(e.target.value))}
                                                 placeholder="+123456789"
                                                 disabled={readOnly}
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label htmlFor="customerEmail">Customer Email</Label>
+                                            <Label htmlFor="customerEmail">
+                                                Customer Email <span className="text-xs text-muted-foreground font-normal ml-1">(Optional)</span>
+                                            </Label>
                                             <Input
                                                 id="customerEmail"
                                                 type="email"
                                                 value={customerEmail}
+                                                maxLength={100}
                                                 onChange={(e) => setCustomerEmail(e.target.value)}
                                                 placeholder="email@example.com"
                                                 disabled={readOnly}
@@ -801,11 +808,14 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                         </div>
                                     </div>
                                     <div className="space-y-2">
-                                        <Label htmlFor="customerNotes">Notes / Address</Label>
+                                        <Label htmlFor="customerNotes">
+                                            Notes / Address <span className="text-xs text-muted-foreground font-normal ml-1">(Optional)</span>
+                                        </Label>
                                         <textarea
                                             id="customerNotes"
                                             className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                                             value={customerNotes}
+                                            maxLength={250}
                                             onChange={(e) => setCustomerNotes(e.target.value)}
                                             placeholder="Additional details..."
                                             disabled={readOnly}
@@ -820,10 +830,13 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                     </h3>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
-                                            <Label htmlFor="imei">IMEI / Identifier</Label>
+                                            <Label htmlFor="imei">
+                                                IMEI / Identifier <span className="text-red-500">*</span>
+                                            </Label>
                                             <Input
                                                 id="imei"
                                                 value={formData.imei}
+                                                maxLength={20}
                                                 onChange={(e) => setFormData({ ...formData, imei: e.target.value })}
                                                 required
                                                 placeholder="15-digit IMEI"
@@ -831,11 +844,14 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label htmlFor="devicePassword">Device Password</Label>
+                                            <Label htmlFor="devicePassword">
+                                                Device Password <span className="text-xs text-muted-foreground font-normal ml-1">(Optional)</span>
+                                            </Label>
                                             <Input
                                                 id="devicePassword"
                                                 type="text"
                                                 value={devicePassword}
+                                                maxLength={50}
                                                 onChange={(e) => setDevicePassword(e.target.value)}
                                                 placeholder="Device Password (if required)"
                                                 disabled={readOnly}
@@ -865,7 +881,9 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                     </h3>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
-                                            <Label htmlFor="speedLimit">Speed Limit (km/h)</Label>
+                                            <Label htmlFor="speedLimit">
+                                                Speed Limit (km/h) <span className="text-xs text-muted-foreground font-normal ml-1">(Optional)</span>
+                                            </Label>
                                             <div className="relative">
                                                 <Input
                                                     id="speedLimit"
@@ -880,7 +898,9 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                             <p className="text-[10px] text-muted-foreground">Values &gt; this will trigger "Over Speed" events.</p>
                                         </div>
                                         <div className="space-y-2">
-                                            <Label htmlFor="fuelDrop">Fuel Drop Threshold</Label>
+                                            <Label htmlFor="fuelDrop">
+                                                Fuel Drop Threshold <span className="text-xs text-muted-foreground font-normal ml-1">(Optional)</span>
+                                            </Label>
                                             <Input
                                                 id="fuelDrop"
                                                 type="number"
@@ -895,7 +915,7 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                 </div>
 
                                 <div className="space-y-3">
-                                    <Label>Assigned Geofences</Label>
+                                    <Label>Assigned Geofences <span className="text-xs text-muted-foreground font-normal ml-1">(Optional)</span></Label>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 border rounded-lg p-4 bg-gray-50/50">
                                         {availableGeofences.map(geofence => (
                                             <div key={geofence.id} className="flex items-center space-x-2">
@@ -1098,7 +1118,7 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                         </AccordionItem>
                     )}
                 </Accordion>
-            </Card >
+            </Card>
 
             {/* Confirmation Dialog */}
             <Dialog open={!!userToRemove} onOpenChange={(open) => !open && setUserToRemove(null)}>
@@ -1119,6 +1139,6 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-        </div >
+        </div>
     );
 }
