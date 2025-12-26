@@ -23,11 +23,17 @@ import TripMap from "@/components/map/TripMap";
 
 // Helper to format duration
 const formatDuration = (ms: number) => {
-  const minutes = Math.floor(ms / 60000);
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  if (hours > 0) return `${hours}h ${mins}m`;
-  return `${mins}m`;
+  if (ms < 1000) return "0s";
+  const seconds = Math.floor((ms / 1000) % 60);
+  const minutes = Math.floor((ms / 60000) % 60);
+  const hours = Math.floor(ms / 3600000);
+
+  const parts = [];
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`);
+
+  return parts.join(" ");
 };
 
 export default function ReportGenerator() {
@@ -45,6 +51,7 @@ export default function ReportGenerator() {
 
   // Map state
   const [isMapCollapsed, setIsMapCollapsed] = useState(false);
+  const mapRef = useRef<HTMLDivElement>(null);
 
   // Address state for route report
   const [addressMap, setAddressMap] = useState<Record<number, string>>({});
@@ -156,41 +163,62 @@ export default function ReportGenerator() {
             count: 1,
             lastPoint: p,
             averageSpeed: speedKnots,
+            lastOverspeedTime: p.fixTime // Track strict overspeed time for gap check
           };
         } else {
-          const dist = calculateDist(
-            currentSegment.lastPoint.latitude,
-            currentSegment.lastPoint.longitude,
-            p.latitude,
-            p.longitude
-          );
+          const timeDiff = new Date(p.fixTime).getTime() - new Date(currentSegment.lastOverspeedTime).getTime();
 
-          const timeDiff = new Date(p.fixTime).getTime() - new Date(currentSegment.lastPoint.fixTime).getTime();
+          // If gap is larger than 5 minutes, assume it's a separate incident
+          if (timeDiff > 5 * 60 * 1000) {
+            // End current segment
+            currentSegment.averageSpeed = currentSegment.speedSum / currentSegment.count;
+            if (currentSegment.duration > 0 || currentSegment.distance > 0) {
+              delete currentSegment.lastPoint;
+              delete currentSegment.speedSum;
+              delete currentSegment.count;
+              delete currentSegment.lastOverspeedTime;
+              segments.push(currentSegment);
+            }
 
-          currentSegment.endTime = p.fixTime;
-          // Only add positive time diffs (in case of out of order points)
-          if (timeDiff > 0) currentSegment.duration += timeDiff;
+            // Start new segment
+            currentSegment = {
+              startTime: p.fixTime,
+              endTime: p.fixTime,
+              duration: 0,
+              distance: 0,
+              maxSpeed: speedKnots,
+              speedSum: speedKnots,
+              count: 1,
+              lastPoint: p,
+              averageSpeed: speedKnots,
+              lastOverspeedTime: p.fixTime
+            };
+          } else {
+            // Continue segment (bridge gap)
+            currentSegment.endTime = p.fixTime;
+            // Recalculate duration from start
+            currentSegment.duration = new Date(p.fixTime).getTime() - new Date(currentSegment.startTime).getTime();
 
-          currentSegment.distance += dist;
-          currentSegment.maxSpeed = Math.max(currentSegment.maxSpeed, speedKnots);
-          currentSegment.speedSum += speedKnots;
-          currentSegment.count += 1;
-          currentSegment.lastPoint = p;
+            const dist = calculateDist(
+              currentSegment.lastPoint.latitude,
+              currentSegment.lastPoint.longitude,
+              p.latitude,
+              p.longitude
+            );
+            currentSegment.distance += dist;
+            currentSegment.maxSpeed = Math.max(currentSegment.maxSpeed, speedKnots);
+            currentSegment.speedSum += speedKnots;
+            currentSegment.count += 1;
+
+            // Update state
+            currentSegment.lastPoint = p;
+            currentSegment.lastOverspeedTime = p.fixTime;
+          }
         }
-      } else if (currentSegment) {
-        // End of segment
-        currentSegment.averageSpeed = currentSegment.speedSum / currentSegment.count;
-
-        // Filter out noise: single point with 0 duration or negligible distance
-        if (currentSegment.duration > 0 || currentSegment.distance > 0) {
-          // Clean up temporary properties
-          delete currentSegment.lastPoint;
-          delete currentSegment.speedSum;
-          delete currentSegment.count;
-          segments.push(currentSegment);
-        }
-        currentSegment = null;
       }
+      // Note: If !isOverspeed, we just continue loop without closing segment.
+      // It will either be closed by a large time gap on next overspeed point,
+      // or at the very end of the loop.
     }
 
     // Push last segment if exists
@@ -200,6 +228,7 @@ export default function ReportGenerator() {
         delete currentSegment.lastPoint;
         delete currentSegment.speedSum;
         delete currentSegment.count;
+        delete currentSegment.lastOverspeedTime;
         segments.push(currentSegment);
       }
     }
@@ -252,7 +281,11 @@ export default function ReportGenerator() {
         default: throw new Error("Unknown report type");
       }
 
-      setReportData(data);
+      setReportData(data.sort((a, b) => {
+        const timeA = new Date(a.startTime || a.eventTime || a.fixTime || 0).getTime();
+        const timeB = new Date(b.startTime || b.eventTime || b.fixTime || 0).getTime();
+        return timeB - timeA;
+      }));
       if (data.length === 0) setError("No data found for the selected period.");
     } catch (err: any) {
       console.error("Report generation failed", err);
@@ -287,6 +320,12 @@ export default function ReportGenerator() {
       const routeData = await getRoute(params);
       setSelectedTripRoute(routeData);
       setIsMapCollapsed(false); // Auto expand map
+
+      // Scroll to map
+      setTimeout(() => {
+        mapRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 300);
+
     } catch (err) {
       console.error("Failed to fetch trip route", err);
       setError("Failed to load map for this trip.");
@@ -559,7 +598,7 @@ export default function ReportGenerator() {
 
           {/* Trip Map for Route/Stops Report and Trips Selection (Collapsible) */}
           {(reportType === 'route' || reportType === 'stops' || ((reportType === 'trips' || reportType === 'overspeed') && selectedTripRoute.length > 0)) && (
-            <div className="mb-6 border rounded-lg overflow-hidden shadow-sm bg-gray-100 transition-all duration-300">
+            <div ref={mapRef} className="mb-6 border rounded-lg overflow-hidden shadow-sm bg-gray-100 transition-all duration-300">
               <div className="flex items-center justify-between p-2 bg-white border-b px-4 cursor-pointer" onClick={() => setIsMapCollapsed(!isMapCollapsed)}>
                 <div className="flex items-center gap-2">
                   <MapPin className="h-4 w-4 text-orange-600" />

@@ -39,8 +39,9 @@ async function fetchJson<T>(endpoint: string, options?: RequestInit): Promise<T>
     return res.json();
 }
 
-export async function getDevices() {
-    return fetchJson<any[]>("/api/devices");
+export async function getDevices(params?: URLSearchParams) {
+    const query = params ? `?${params.toString()}` : "";
+    return fetchJson<any[]>(`/api/devices${query}`);
 }
 
 export async function createDevice(device: any) {
@@ -115,6 +116,11 @@ export async function removePermission(permission: { userId?: number; deviceId?:
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(permission),
     });
+}
+
+export async function getPermissions(params?: URLSearchParams) {
+    const query = params ? `?${params.toString()}` : "";
+    return fetchJson<any[]>(`/api/permissions${query}`);
 }
 
 

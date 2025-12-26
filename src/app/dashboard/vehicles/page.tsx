@@ -1,17 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { initialVehicles, Vehicle, initialUsers } from "@/lib/data";
-import { traccarApi } from "@/lib/api";
+import { initialVehicles, Vehicle, User, Driver } from "@/lib/data";
+import { traccarApi, getUsers, getDrivers } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Search, Truck, Car, AlertCircle, Ship, Plane, Bike, User, Bus, Anchor, Tractor } from "lucide-react";
+import { Plus, Search, Truck, Car, AlertCircle, Ship, Plane, Bike, User as UserIcon, Bus, Anchor, Tractor } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 export default function VehiclesPage() {
-    const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+    const [vehicles, setVehicles] = useState<any[]>([]); // Using any for enriched vehicle object temporarily or extend Vehicle
+    // Users and Drivers lists are no longer needed for client-side resolution
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [search, setSearch] = useState("");
@@ -19,33 +20,37 @@ export default function VehiclesPage() {
     useEffect(() => {
         const fetchVehicles = async () => {
             try {
-                const response = await traccarApi("/api/devices");
+                // Fetch from server-side aggregation endpoint
+                const response = await fetch("/api/custom/vehicles");
+
                 if (!response.ok) {
-                    throw new Error("Failed to fetch devices");
+                    throw new Error("Failed to fetch vehicles");
                 }
                 const data = await response.json();
 
-                const mappedVehicles: Vehicle[] = data.map((device: any) => ({
-                    id: device.id.toString(),
+                // Start mapping
+                const mappedVehicles = data.map((device: any) => ({
+                    id: device.id,
                     name: device.name,
-                    model: device.model || "Unknown Model",
-                    imei: device.uniqueId,
-                    userId: device.attributes?.userId?.toString(), // Assuming userId might be in attributes or similar
+                    model: device.model,
+                    imei: device.imei,
+                    userId: device.userId,
+                    driverId: device.driverId,
+                    userName: device.userName,
+                    driverName: device.driverName,
                     status: device.status,
                     lastUpdate: new Date(device.lastUpdate).toLocaleString(),
-                    lat: 0, // Placeholder
-                    lng: 0, // Placeholder
+                    lat: 0,
+                    lng: 0,
                     icon: device.category || "default",
                     category: device.category,
-                    positionId: device.positionId?.toString(),
+                    positionId: device.positionId,
                 }));
 
                 setVehicles(mappedVehicles);
             } catch (err) {
                 console.error("Error fetching vehicles:", err);
                 setError("Failed to load vehicles. Please try again later.");
-                // Fallback to initialVehicles if fetch fails, or just show error
-                // setVehicles(initialVehicles); 
             } finally {
                 setLoading(false);
             }
@@ -59,12 +64,6 @@ export default function VehiclesPage() {
         vehicle.model.toLowerCase().includes(search.toLowerCase()) ||
         vehicle.imei.includes(search)
     );
-
-    const getUserName = (userId?: string) => {
-        if (!userId) return "Unassigned";
-        const user = initialUsers.find(u => u.id === userId);
-        return user ? user.name : "Unknown";
-    };
 
     const getStatusColor = (status: Vehicle["status"]) => {
         switch (status) {
@@ -84,11 +83,11 @@ export default function VehiclesPage() {
             case "scooter":
             case "bicycle": return <Bike className="h-4 w-4 text-muted-foreground" />;
             case "ship":
-            case "boat": return <Anchor className="h-4 w-4 text-muted-foreground" />; // or Ship if available
+            case "boat": return <Anchor className="h-4 w-4 text-muted-foreground" />;
             case "plane":
             case "helicopter": return <Plane className="h-4 w-4 text-muted-foreground" />;
             case "tractor": return <Tractor className="h-4 w-4 text-muted-foreground" />;
-            case "person": return <User className="h-4 w-4 text-muted-foreground" />;
+            case "person": return <UserIcon className="h-4 w-4 text-muted-foreground" />;
             default: return <Truck className="h-4 w-4 text-muted-foreground" />;
         }
     };
@@ -130,7 +129,7 @@ export default function VehiclesPage() {
                 </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 {filteredVehicles.map((vehicle) => (
                     <Card key={vehicle.id}>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -145,12 +144,16 @@ export default function VehiclesPage() {
 
                             <div className="space-y-2">
                                 <div className="flex justify-between text-sm">
-                                    <span className="text-muted-foreground">Assigned to:</span>
-                                    <span className="font-medium">{getUserName(vehicle.userId)}</span>
+                                    <span className="text-muted-foreground">User:</span>
+                                    <span className="font-medium truncate max-w-[120px]" title={vehicle.userName}>{vehicle.userName}</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-muted-foreground">Driver:</span>
+                                    <span className="font-medium truncate max-w-[120px]" title={vehicle.driverName}>{vehicle.driverName}</span>
                                 </div>
                                 <div className="flex justify-between text-sm">
                                     <span className="text-muted-foreground">Last Update:</span>
-                                    <span className="font-medium">{vehicle.lastUpdate}</span>
+                                    <span className="font-medium text-xs text-right max-w-[140px]">{vehicle.lastUpdate}</span>
                                 </div>
                                 <div className="pt-2 flex items-center justify-between">
                                     <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium border", getStatusColor(vehicle.status))} >
