@@ -2,17 +2,17 @@ import { Geofence } from "./data";
 
 // Calculate distance between two points in meters using Haversine formula
 function getDistanceFromLatLonInMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
-    var R = 6371; // Radius of the earth in km
-    var dLat = deg2rad(lat2 - lat1);
-    var dLon = deg2rad(lon2 - lon1);
-    var a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    var radiusOfEarthInKm = 6371; // Radius of the earth in km
+    var latitudeDifference = deg2rad(lat2 - lat1);
+    var longitudeDifference = deg2rad(lon2 - lon1);
+    var haversineValue =
+        Math.sin(latitudeDifference / 2) * Math.sin(latitudeDifference / 2) +
         Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
-        Math.sin(dLon / 2) * Math.sin(dLon / 2)
+        Math.sin(longitudeDifference / 2) * Math.sin(longitudeDifference / 2)
         ;
-    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    var d = R * c; // Distance in km
-    return d * 1000; // Distance in meters
+    var centralAngle = 2 * Math.atan2(Math.sqrt(haversineValue), Math.sqrt(1 - haversineValue));
+    var distanceInKm = radiusOfEarthInKm * centralAngle; // Distance in km
+    return distanceInKm * 1000; // Distance in meters
 }
 
 function deg2rad(deg: number) {

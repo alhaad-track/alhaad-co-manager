@@ -6,7 +6,7 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { reverseGeocode } from "@/lib/api";
 import { Vehicle, mockTripPaths } from "@/lib/data";
-import { Car, Truck, Bus, Bike, Box } from "lucide-react";
+import { Car, Truck, Bus, Bike, Box, Anchor, Plane, User, Leaf, Tractor, Ship } from "lucide-react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 // Fix Leaflet icon issue
@@ -118,20 +118,55 @@ function ZoomHandler({ setZoom }: { setZoom: (z: number) => void }) {
 }
 
 // Helper to create custom marker icon
-const createVehicleIcon = (type: string) => {
-    if (type === "default" || !type) {
-        return customIcon;
+const createVehicleIcon = (type: string, category?: string) => {
+    // Use category if available, otherwise fallback to icon (legacy) or default
+    const iconType = (category || type || "default").toLowerCase().trim();
+
+    let IconComponent = Truck; // Default fallback
+
+    switch (iconType) {
+        case "car":
+        case "pickup": IconComponent = Car; break;
+
+        case "truck":
+        case "lorry": IconComponent = Truck; break;
+
+        case "camper":
+        case "van":
+        case "ambulance": IconComponent = Box; break;
+
+        case "bus":
+        case "minibus":
+        case "trolleybus":
+        case "tram": IconComponent = Bus; break;
+
+        case "motorcycle":
+        case "motorbike":
+        case "scooter":
+        case "bicycle": IconComponent = Bike; break;
+
+        case "boat":
+        case "ship": IconComponent = Anchor; break;
+
+        case "plane":
+        case "helicopter": IconComponent = Plane; break;
+
+        case "tractor":
+        case "crane":
+        case "offroad": IconComponent = Tractor; break;
+
+        case "person": IconComponent = User; break;
+
+        case "animal": IconComponent = Leaf; break;
+
+        case "train": IconComponent = Truck; break;
+
+        default: IconComponent = Truck;
     }
 
-    let IconComponent = Car;
-    switch (type) {
-        case "truck": IconComponent = Truck; break;
-        case "van": IconComponent = Box; break; // Using Box as proxy for Van
-        case "bus": IconComponent = Bus; break;
-        case "motorcycle": IconComponent = Bike; break;
-        case "car": IconComponent = Car; break;
-        default: return customIcon;
-    }
+    // Specific overrides if needed (e.g. Tractor)
+    if (iconType === 'tractor') IconComponent = Tractor;
+    if (iconType === 'ship' || iconType === 'boat') IconComponent = Ship;
 
     const iconHtml = renderToStaticMarkup(
         <div className="bg-white rounded-full p-1 border-2 border-blue-600 shadow-md">
@@ -149,35 +184,57 @@ const createVehicleIcon = (type: string) => {
 };
 
 // Smoothly moving marker
-const MovingMarker = ({ position, icon, children, onSelect }: { position: [number, number], icon: L.DivIcon, children: React.ReactNode, onSelect?: () => void }) => {
+const MovingMarker = ({ position, icon, children, onSelect, onDoubleClick }: { position: [number, number], icon: L.DivIcon, children: React.ReactNode, onSelect?: () => void, onDoubleClick?: () => void }) => {
     const markerRef = useRef<L.Marker>(null);
-    const [prevPos, setPrevPos] = useState(position);
+    // We only pass the initial position to the Marker component to prevent React Leaflet from forcing updates.
+    // We handle all position updates manually via setLatLng for animation.
+    const [initialPos] = useState(position);
+
     const requestRef = useRef<number | null>(null);
     const startTimeRef = useRef<number | null>(null);
-    const duration = 1000; // 1 second animation
+    const duration = 4000; // 4 seconds animation (Smooth motion)
 
     useEffect(() => {
-        // If position unchanged, do nothing
-        if (position[0] === prevPos[0] && position[1] === prevPos[1]) return;
+        const marker = markerRef.current;
+        if (!marker) return;
+
+        // Cancel previous animation
+        if (requestRef.current) {
+            cancelAnimationFrame(requestRef.current);
+        }
+
+        // Get current visual position to start animation from
+        // This prevents jumping back if an update arrives mid-animation
+        const currentLatLng = marker.getLatLng();
+        const startLat = currentLatLng.lat;
+        const startLng = currentLatLng.lng;
+
+        // Target (new position)
+        const targetLat = position[0];
+        const targetLng = position[1];
+
+        // If practically same, skip
+        if (Math.abs(startLat - targetLat) < 0.000001 && Math.abs(startLng - targetLng) < 0.000001) {
+            return;
+        }
+
+        startTimeRef.current = null;
 
         const animate = (time: number) => {
             if (startTimeRef.current === null) startTimeRef.current = time;
-            const progress = (time - startTimeRef.current) / duration;
+            const elapsed = time - startTimeRef.current;
+            const progress = Math.min(elapsed / duration, 1);
+
+            // Linear interpolation
+            const lat = startLat + (targetLat - startLat) * progress;
+            const lng = startLng + (targetLng - startLng) * progress;
+
+            marker.setLatLng([lat, lng]);
 
             if (progress < 1) {
-                const lat = prevPos[0] + (position[0] - prevPos[0]) * progress;
-                const lng = prevPos[1] + (position[1] - prevPos[1]) * progress;
-
-                if (markerRef.current) {
-                    markerRef.current.setLatLng([lat, lng]);
-                }
                 requestRef.current = requestAnimationFrame(animate);
             } else {
-                if (markerRef.current) {
-                    markerRef.current.setLatLng(position);
-                }
-                setPrevPos(position); // Update previous position to current target
-                startTimeRef.current = null; // Reset for next animation
+                startTimeRef.current = null;
             }
         };
 
@@ -185,9 +242,8 @@ const MovingMarker = ({ position, icon, children, onSelect }: { position: [numbe
 
         return () => {
             if (requestRef.current) cancelAnimationFrame(requestRef.current);
-            startTimeRef.current = null;
         };
-    }, [position, prevPos]);
+    }, [position[0], position[1]]); // Trigger only when coordinates change
 
     // Update icon if it changes
     useEffect(() => {
@@ -196,14 +252,33 @@ const MovingMarker = ({ position, icon, children, onSelect }: { position: [numbe
         }
     }, [icon]);
 
+    // Click handling with debounce to separate click vs dblclick
+    const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
     return (
         <Marker
             ref={markerRef}
-            position={prevPos} // Initialize with prevPos (start of animation)
+            position={initialPos} // Static initial position
             icon={icon}
             eventHandlers={{
                 click: () => {
-                    if (onSelect) onSelect();
+                    if (clickTimeoutRef.current) {
+                        clearTimeout(clickTimeoutRef.current);
+                        clickTimeoutRef.current = null;
+                        return;
+                    }
+
+                    clickTimeoutRef.current = setTimeout(() => {
+                        if (onSelect) onSelect();
+                        clickTimeoutRef.current = null;
+                    }, 300);
+                },
+                dblclick: () => {
+                    if (clickTimeoutRef.current) {
+                        clearTimeout(clickTimeoutRef.current);
+                        clickTimeoutRef.current = null;
+                    }
+                    if (onDoubleClick) onDoubleClick();
                 }
             }}
         >
@@ -212,7 +287,15 @@ const MovingMarker = ({ position, icon, children, onSelect }: { position: [numbe
     );
 };
 
-export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicle, livePath }: MapComponentProps) {
+export interface MapComponentProps {
+    vehicles: Vehicle[];
+    selectedVehicle?: Vehicle | null;
+    onSelectVehicle?: (vehicle: Vehicle) => void;
+    onDoubleClickVehicle?: (vehicle: Vehicle) => void;
+    livePath?: TripPoint[];
+}
+
+export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicle, onDoubleClickVehicle, livePath }: MapComponentProps) {
     const selectedTrip = selectedVehicle ? mockTripPaths[selectedVehicle.id] : null;
     const [zoom, setZoom] = useState(13); // Default zoom
 
@@ -246,18 +329,97 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
     // Determine path for default display fallback
     const pathCoordinates = selectedTrip ? selectedTrip.path : [];
 
-    // Filter points based on zoom level
-    const getStep = (z: number) => {
-        if (z < 10) return 40;
-        if (z < 12) return 30;
-        if (z < 14) return 15;
-        if (z < 16) return 8;
-        return 1;
+    // Filter points based on zoom level (Distance in meters)
+    const getMinDistance = (z: number) => {
+        if (z < 10) return 50000; // 50km
+        if (z < 12) return 10000; // 10km
+        if (z < 13) return 5000;  // 5km
+        if (z < 14) return 2000;  // 2km
+        if (z < 15) return 1000;  // 1km
+        if (z < 16) return 500;   // 500m
+        if (z < 17) return 200;   // 200m
+        return 100;               // 100m min distance at highest zoom
     };
 
-    const step = getStep(zoom);
-    // If we have livePath, ensure the very last point is always included so the connection to the vehicle is clear
-    const visiblePoints = livePath ? livePath.filter((_, i) => i % step === 0 || i === livePath.length - 1) : [];
+    // Haversine formula for distance
+    const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+        const R = 6371e3; // metres
+        const φ1 = lat1 * Math.PI / 180;
+        const φ2 = lat2 * Math.PI / 180;
+        const Δφ = (lat2 - lat1) * Math.PI / 180;
+        const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+        const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+        return R * c;
+    };
+
+    const minDistance = getMinDistance(zoom);
+
+    const visiblePoints = (() => {
+        if (!livePath || livePath.length === 0) return [];
+
+        const latestPoint = livePath[livePath.length - 1];
+        const latestTime = latestPoint.fixTime ? new Date(latestPoint.fixTime).getTime() : Date.now();
+        const oneHourMs = 60 * 60 * 1000;
+        const stationaryThreshold = 100; // Increased to 100 meters to be more aggressive
+
+        // Check if vehicle has been effectively stationary for the last hour
+        // We check if the maximum distance from the latest point in the last hour is small
+        let isStationaryForLastHour = false;
+        let maxDist = 0;
+
+        // Scan backwards to find max deviation in last hour
+        for (let i = livePath.length - 1; i >= 0; i--) {
+            const p = livePath[i];
+            const pTime = p.fixTime ? new Date(p.fixTime).getTime() : 0;
+            if (latestTime - pTime > oneHourMs) break;
+
+            const d = calculateDistance(p.latitude, p.longitude, latestPoint.latitude, latestPoint.longitude);
+            if (d > maxDist) maxDist = d;
+        }
+
+        if (maxDist < stationaryThreshold) {
+            isStationaryForLastHour = true;
+        }
+
+        const points: TripPoint[] = [];
+        let lastPoint: TripPoint | null = null;
+
+        for (let i = 0; i < livePath.length; i++) {
+            const point = livePath[i];
+
+            // Stationary Filter: If stationary for last hour, hide points from that hour
+            if (isStationaryForLastHour) {
+                const pTime = point.fixTime ? new Date(point.fixTime).getTime() : 0;
+                if (latestTime - pTime < oneHourMs) {
+                    continue;
+                }
+            }
+
+            // Always include the last point (Unless it was filtered out by stationary check above)
+            if (i === livePath.length - 1) {
+                points.push(point);
+                continue;
+            }
+
+            if (!lastPoint) {
+                points.push(point);
+                lastPoint = point;
+                continue;
+            }
+
+            const dist = calculateDistance(lastPoint.latitude, lastPoint.longitude, point.latitude, point.longitude);
+            if (dist >= minDistance) {
+                points.push(point);
+                lastPoint = point;
+            }
+        }
+        return points;
+    })();
 
     return (
         <MapContainer center={[51.505, -0.09]} zoom={13} style={{ height: "100%", width: "100%" }}>
@@ -303,10 +465,22 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
                         />
                     ))}
 
-                    {/* Start Marker */}
-                    <Marker position={[livePath[0].latitude, livePath[0].longitude]} icon={startIcon}>
-                        <Popup>Start of History (1h ago)</Popup>
-                    </Marker>
+                    {/* Start Marker - Only show if current position is significantly different (> 50m) from start */
+                        (() => {
+                            const startPoint = livePath[0];
+                            const currentLat = selectedVehicle.lat;
+                            const currentLng = selectedVehicle.lng;
+                            const dist = Math.sqrt(Math.pow(startPoint.latitude - currentLat, 2) + Math.pow(startPoint.longitude - currentLng, 2));
+                            // Approx 0.0005 degrees is roughly 50m
+                            if (dist > 0.0005) {
+                                return (
+                                    <Marker position={[startPoint.latitude, startPoint.longitude]} icon={startIcon}>
+                                        <Popup>Start of History (1h ago)</Popup>
+                                    </Marker>
+                                );
+                            }
+                            return null;
+                        })()}
 
                     {/* Interactive Points (Green Arrows) */}
                     {visiblePoints.map((point, idx) => {
@@ -376,10 +550,15 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
                 <MovingMarker
                     key={vehicle.id}
                     position={[vehicle.lat, vehicle.lng]}
-                    icon={createVehicleIcon(vehicle.icon || "car")}
+                    icon={createVehicleIcon(vehicle.icon || "default", vehicle.category)}
                     onSelect={() => {
                         if (onSelectVehicle) {
                             onSelectVehicle(vehicle);
+                        }
+                    }}
+                    onDoubleClick={() => {
+                        if (onDoubleClickVehicle) {
+                            onDoubleClickVehicle(vehicle);
                         }
                     }}
                 >

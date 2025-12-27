@@ -23,11 +23,17 @@ import TripMap from "@/components/map/TripMap";
 
 // Helper to format duration
 const formatDuration = (ms: number) => {
-  const minutes = Math.floor(ms / 60000);
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  if (hours > 0) return `${hours}h ${mins}m`;
-  return `${mins}m`;
+  if (ms < 1000) return "0s";
+  const seconds = Math.floor((ms / 1000) % 60);
+  const minutes = Math.floor((ms / 60000) % 60);
+  const hours = Math.floor(ms / 3600000);
+
+  const parts = [];
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`);
+
+  return parts.join(" ");
 };
 
 export default function ReportGenerator() {
@@ -45,6 +51,7 @@ export default function ReportGenerator() {
 
   // Map state
   const [isMapCollapsed, setIsMapCollapsed] = useState(false);
+  const mapRef = useRef<HTMLDivElement>(null);
 
   // Address state for route report
   const [addressMap, setAddressMap] = useState<Record<number, string>>({});
@@ -114,6 +121,121 @@ export default function ReportGenerator() {
     return { from: from.toISOString(), to: to.toISOString() };
   };
 
+  // --- Overspeed Calculation Helper ---
+  // --- Overspeed Calculation Helper ---
+  const calculateOverspeedSegments = (route: any[], speedLimit: number) => {
+    const segments: any[] = [];
+    let currentSegment: any = null;
+
+    const calculateDist = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+      const earthRadiusMeters = 6371e3; // metres
+      const lat1Rad = (Number(lat1) * Math.PI) / 180;
+      const lat2Rad = (Number(lat2) * Math.PI) / 180;
+      const latDiff = ((Number(lat2) - Number(lat1)) * Math.PI) / 180;
+      const lonDiff = ((Number(lon2) - Number(lon1)) * Math.PI) / 180;
+      const haversineValue =
+        Math.sin(latDiff / 2) * Math.sin(latDiff / 2) +
+        Math.cos(lat1Rad) * Math.cos(lat2Rad) * Math.sin(lonDiff / 2) * Math.sin(lonDiff / 2);
+      const centralAngle = 2 * Math.atan2(Math.sqrt(haversineValue), Math.sqrt(1 - haversineValue));
+      return earthRadiusMeters * centralAngle;
+    };
+
+    // Parse speed limit to ensure it's a number (assuming it's in KM/H)
+    const limitKmh = Number(speedLimit) || 0;
+
+    for (let i = 0; i < route.length; i++) {
+      const p = route[i];
+      if (!limitKmh) continue;
+
+      const speedKnots = Number(p.speed) || 0;
+      const speedKmh = speedKnots * 1.852;
+      const isOverspeed = speedKmh > limitKmh;
+
+      if (isOverspeed) {
+        if (!currentSegment) {
+          currentSegment = {
+            startTime: p.fixTime,
+            endTime: p.fixTime,
+            duration: 0,
+            distance: 0,
+            maxSpeed: speedKnots, // Keep in knots for consistency with display logic
+            speedSum: speedKnots,
+            count: 1,
+            lastPoint: p,
+            averageSpeed: speedKnots,
+            lastOverspeedTime: p.fixTime // Track strict overspeed time for gap check
+          };
+        } else {
+          const timeDiff = new Date(p.fixTime).getTime() - new Date(currentSegment.lastOverspeedTime).getTime();
+
+          // If gap is larger than 5 minutes, assume it's a separate incident
+          if (timeDiff > 5 * 60 * 1000) {
+            // End current segment
+            currentSegment.averageSpeed = currentSegment.speedSum / currentSegment.count;
+            if (currentSegment.duration > 0 || currentSegment.distance > 0) {
+              delete currentSegment.lastPoint;
+              delete currentSegment.speedSum;
+              delete currentSegment.count;
+              delete currentSegment.lastOverspeedTime;
+              segments.push(currentSegment);
+            }
+
+            // Start new segment
+            currentSegment = {
+              startTime: p.fixTime,
+              endTime: p.fixTime,
+              duration: 0,
+              distance: 0,
+              maxSpeed: speedKnots,
+              speedSum: speedKnots,
+              count: 1,
+              lastPoint: p,
+              averageSpeed: speedKnots,
+              lastOverspeedTime: p.fixTime
+            };
+          } else {
+            // Continue segment (bridge gap)
+            currentSegment.endTime = p.fixTime;
+            // Recalculate duration from start
+            currentSegment.duration = new Date(p.fixTime).getTime() - new Date(currentSegment.startTime).getTime();
+
+            const dist = calculateDist(
+              currentSegment.lastPoint.latitude,
+              currentSegment.lastPoint.longitude,
+              p.latitude,
+              p.longitude
+            );
+            currentSegment.distance += dist;
+            currentSegment.maxSpeed = Math.max(currentSegment.maxSpeed, speedKnots);
+            currentSegment.speedSum += speedKnots;
+            currentSegment.count += 1;
+
+            // Update state
+            currentSegment.lastPoint = p;
+            currentSegment.lastOverspeedTime = p.fixTime;
+          }
+        }
+      }
+      // Note: If !isOverspeed, we just continue loop without closing segment.
+      // It will either be closed by a large time gap on next overspeed point,
+      // or at the very end of the loop.
+    }
+
+    // Push last segment if exists
+    if (currentSegment) {
+      currentSegment.averageSpeed = currentSegment.speedSum / currentSegment.count;
+      if (currentSegment.duration > 0 || currentSegment.distance > 0) {
+        delete currentSegment.lastPoint;
+        delete currentSegment.speedSum;
+        delete currentSegment.count;
+        delete currentSegment.lastOverspeedTime;
+        segments.push(currentSegment);
+      }
+    }
+
+    return segments;
+  };
+
   const handleGenerate = async () => {
     if (!selectedDeviceId) {
       setError("Please select a device.");
@@ -145,10 +267,25 @@ export default function ReportGenerator() {
           break;
         case "events": data = await getEvents(params); break;
         case "route": data = await getRoute(params); break;
+        case "overspeed":
+          const route = await getRoute(params);
+          const device = devices.find(d => d.id.toString() === selectedDeviceId);
+          const speedLimit = device?.attributes?.speedLimit;
+          if (speedLimit && speedLimit > 0) {
+            data = calculateOverspeedSegments(route, speedLimit);
+          } else {
+            setError("Device does not have a speed limit configured.");
+            data = [];
+          }
+          break;
         default: throw new Error("Unknown report type");
       }
 
-      setReportData(data);
+      setReportData(data.sort((a, b) => {
+        const timeA = new Date(a.startTime || a.eventTime || a.fixTime || 0).getTime();
+        const timeB = new Date(b.startTime || b.eventTime || b.fixTime || 0).getTime();
+        return timeB - timeA;
+      }));
       if (data.length === 0) setError("No data found for the selected period.");
     } catch (err: any) {
       console.error("Report generation failed", err);
@@ -183,6 +320,12 @@ export default function ReportGenerator() {
       const routeData = await getRoute(params);
       setSelectedTripRoute(routeData);
       setIsMapCollapsed(false); // Auto expand map
+
+      // Scroll to map
+      setTimeout(() => {
+        mapRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 300);
+
     } catch (err) {
       console.error("Failed to fetch trip route", err);
       setError("Failed to load map for this trip.");
@@ -243,6 +386,16 @@ export default function ReportGenerator() {
         { label: "Data Points", value: reportData.length, icon: MapPin, color: "text-blue-600", bg: "bg-blue-100" },
         { label: "Avg Speed", value: `${(avgSpeed * 1.852).toFixed(1)} km/h`, icon: TrendingUp, color: "text-green-600", bg: "bg-green-100" }
       ];
+    } else if (reportType === "overspeed") {
+      const totalDuration = reportData.reduce((acc, s) => acc + s.duration, 0);
+      const totalDist = reportData.reduce((acc, s) => acc + s.distance, 0);
+      const maxSpeed = reportData.length ? Math.max(...reportData.map(s => s.maxSpeed)) : 0;
+      return [
+        { label: "Incidents", value: reportData.length, icon: AlertTriangle, color: "text-red-600", bg: "bg-red-100" },
+        { label: "Total Duration", value: formatDuration(totalDuration), icon: Clock, color: "text-orange-600", bg: "bg-orange-100" },
+        { label: "Overspeed Dist", value: `${(totalDist / 1000).toFixed(2)} km`, icon: MapPin, color: "text-blue-600", bg: "bg-blue-100" },
+        { label: "Max Speed", value: `${(maxSpeed * 1.852).toFixed(1)} km/h`, icon: TrendingUp, color: "text-purple-600", bg: "bg-purple-100" }
+      ];
     }
     return [];
   }, [reportData, reportType]);
@@ -281,6 +434,11 @@ export default function ReportGenerator() {
       return reportData.filter((_, i) => i % Math.max(1, Math.floor(reportData.length / 50)) === 0).map(p => ({
         name: new Date(p.fixTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         value: parseFloat(((p.speed || 0) * 1.852).toFixed(1))
+      }));
+    } else if (reportType === "overspeed") {
+      return reportData.map((s, i) => ({
+        name: new Date(s.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        value: parseFloat((s.duration / 1000).toFixed(1)), // Seconds
       }));
     }
     return [];
@@ -336,6 +494,15 @@ export default function ReportGenerator() {
           p.speed ? (p.speed * 1.852).toFixed(1) : "0",
           addressMap[idx] || p.address || "-"
         ]);
+      } else if (reportType === "overspeed") {
+        head = [['Start Time', 'Duration', 'Max Speed (km/h)', 'Avg Speed', 'Distance (km)']];
+        body = reportData.map(s => [
+          new Date(s.startTime).toLocaleString(),
+          formatDuration(s.duration),
+          (s.maxSpeed * 1.852).toFixed(1),
+          (s.averageSpeed * 1.852).toFixed(1),
+          (s.distance / 1000).toFixed(2)
+        ]);
       }
 
       autoTable(doc, { startY: 50, head, body });
@@ -355,7 +522,7 @@ export default function ReportGenerator() {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
             <div className="space-y-2"><Label>Device</Label><Select value={selectedDeviceId} onValueChange={setSelectedDeviceId}><SelectTrigger><SelectValue placeholder="Select Device" /></SelectTrigger><SelectContent>{devices.map(d => (<SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>))}</SelectContent></Select></div>
-            <div className="space-y-2"><Label>Report Type</Label><Select value={reportType} onValueChange={setReportType}><SelectTrigger><SelectValue placeholder="Select Type" /></SelectTrigger><SelectContent><SelectItem value="trips">Trips</SelectItem><SelectItem value="stops">Stops</SelectItem><SelectItem value="summary">Summary</SelectItem><SelectItem value="daily">Daily Summary</SelectItem><SelectItem value="events">Events</SelectItem><SelectItem value="route">Route (Raw Data)</SelectItem></SelectContent></Select></div>
+            <div className="space-y-2"><Label>Report Type</Label><Select value={reportType} onValueChange={setReportType}><SelectTrigger><SelectValue placeholder="Select Type" /></SelectTrigger><SelectContent><SelectItem value="trips">Trips</SelectItem><SelectItem value="stops">Stops</SelectItem><SelectItem value="summary">Summary</SelectItem><SelectItem value="daily">Daily Summary</SelectItem><SelectItem value="events">Events</SelectItem><SelectItem value="route">Route (Raw Data)</SelectItem><SelectItem value="overspeed">Speed Analysis</SelectItem></SelectContent></Select></div>
             <div className="space-y-2"><Label>Period</Label><Select value={period} onValueChange={setPeriod}><SelectTrigger><SelectValue placeholder="Select Period" /></SelectTrigger><SelectContent><SelectItem value="today">Today</SelectItem><SelectItem value="yesterday">Yesterday</SelectItem><SelectItem value="this_week">This Week</SelectItem><SelectItem value="7_days">Last 7 Days</SelectItem><SelectItem value="this_month">This Month</SelectItem><SelectItem value="custom">Custom Range</SelectItem></SelectContent></Select></div>
             <Button onClick={handleGenerate} disabled={loading} className="bg-orange-600 hover:bg-orange-700 text-white w-full">{loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Filter className="mr-2 h-4 w-4" />} Generate Report</Button>
           </div>
@@ -391,40 +558,6 @@ export default function ReportGenerator() {
             </div>
           )}
 
-          {/* Trip Map for Route/Stops Report and Trips Selection (Collapsible) */}
-          {(reportType === 'route' || reportType === 'stops' || (reportType === 'trips' && selectedTripRoute.length > 0)) && (
-            <div className="mb-6 border rounded-lg overflow-hidden shadow-sm bg-gray-100 transition-all duration-300">
-              <div className="flex items-center justify-between p-2 bg-white border-b px-4 cursor-pointer" onClick={() => setIsMapCollapsed(!isMapCollapsed)}>
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-orange-600" />
-                  <h3 className="font-semibold text-sm text-gray-700">
-                    {reportType === 'stops' ? 'Stops Visualization' :
-                      reportType === 'trips' ? 'Trip Route Visualization' :
-                        'Route Map Visualization'}
-                  </h3>
-                </div>
-                <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-                  {isMapCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-                </Button>
-              </div>
-              {!isMapCollapsed && (
-                <div className="h-[400px] relative">
-                  <TripMap
-                    showAllMarkers={reportType === 'stops'}
-                    maxSpeed={devices.find(d => d.id.toString() === selectedDeviceId)?.attributes?.speedLimit}
-                    route={reportType === 'trips' ? selectedTripRoute : reportData.map(p => ({
-                      latitude: p.latitude,
-                      longitude: p.longitude,
-                      fixTime: p.startTime || p.fixTime,
-                      speed: p.speed || 0,
-                      address: p.address
-                    }))}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Visualization Chart */}
           {chartData.length > 0 && reportType !== 'summary' && (
             <Card className="border-none shadow-sm bg-white">
@@ -454,13 +587,48 @@ export default function ReportGenerator() {
                         <XAxis dataKey="name" />
                         <YAxis />
                         <Tooltip cursor={{ fill: 'transparent' }} />
-                        <Bar dataKey="value" fill="#ea580c" radius={[4, 4, 0, 0]} name={reportType === 'trips' || reportType === 'daily' ? 'Distance (km)' : 'Duration (min)'} />
+                        <Bar dataKey="value" fill="#ea580c" radius={[4, 4, 0, 0]} name={reportType === 'trips' || reportType === 'daily' ? 'Distance (km)' : reportType === 'overspeed' ? 'Duration (sec)' : 'Duration (min)'} />
                       </BarChart>
                     )}
                   </ResponsiveContainer>
                 </div>
               </CardContent>
             </Card>
+          )}
+
+          {/* Trip Map for Route/Stops Report and Trips Selection (Collapsible) */}
+          {(reportType === 'route' || reportType === 'stops' || ((reportType === 'trips' || reportType === 'overspeed') && selectedTripRoute.length > 0)) && (
+            <div ref={mapRef} className="mb-6 border rounded-lg overflow-hidden shadow-sm bg-gray-100 transition-all duration-300">
+              <div className="flex items-center justify-between p-2 bg-white border-b px-4 cursor-pointer" onClick={() => setIsMapCollapsed(!isMapCollapsed)}>
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-orange-600" />
+                  <h3 className="font-semibold text-sm text-gray-700">
+                    {reportType === 'stops' ? 'Stops Visualization' :
+                      reportType === 'trips' ? 'Trip Route Visualization' :
+                        reportType === 'overspeed' ? 'Overspeed Segment Visualization' :
+                          'Route Map Visualization'}
+                  </h3>
+                </div>
+                <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
+                  {isMapCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                </Button>
+              </div>
+              {!isMapCollapsed && (
+                <div className="h-[400px] relative">
+                  <TripMap
+                    showAllMarkers={reportType === 'stops'}
+                    maxSpeed={devices.find(d => d.id.toString() === selectedDeviceId)?.attributes?.speedLimit}
+                    route={(reportType === 'trips' || reportType === 'overspeed') ? selectedTripRoute : reportData.map(p => ({
+                      latitude: p.latitude,
+                      longitude: p.longitude,
+                      fixTime: p.startTime || p.fixTime,
+                      speed: p.speed || 0,
+                      address: p.address
+                    }))}
+                  />
+                </div>
+              )}
+            </div>
           )}
 
           {/* Details Table */}
@@ -475,6 +643,7 @@ export default function ReportGenerator() {
                     {reportType === "summary" && ["Device", "Distance", "Max Speed", "Engine Hours"].map(h => <th key={h} className="px-6 py-3 font-medium">{h}</th>)}
                     {reportType === "daily" && ["Date", "Distance", "Max Speed", "Engine Hours", "Spent Fuel"].map(h => <th key={h} className="px-6 py-3 font-medium">{h}</th>)}
                     {reportType === "route" && ["Time", "Lat", "Lon", "Speed", "Address"].map(h => <th key={h} className="px-6 py-3 font-medium">{h}</th>)}
+                    {reportType === "overspeed" && ["Start Time", "Duration", "Max Speed", "Avg Speed", "Distance", "Action"].map(h => <th key={h} className="px-6 py-3 font-medium">{h}</th>)}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -532,6 +701,21 @@ export default function ReportGenerator() {
                                 {loadingAddresses[idx] ? <Loader2 className="h-3 w-3 animate-spin" /> : "Show Address"}
                               </Button>
                             )}
+                          </td>
+                        </>
+                      )}
+                      {reportType === "overspeed" && (
+                        <>
+                          <td className="px-6 py-4">{new Date(row.startTime).toLocaleString()}</td>
+                          <td className="px-6 py-4">{formatDuration(row.duration)}</td>
+                          <td className="px-6 py-4">{((row.maxSpeed || 0) * 1.852).toFixed(1)} km/h</td>
+                          <td className="px-6 py-4">{((row.averageSpeed || 0) * 1.852).toFixed(1)} km/h</td>
+                          <td className="px-6 py-4">{(row.distance / 1000).toFixed(2)} km</td>
+                          <td className="px-6 py-4">
+                            <Button variant="ghost" size="sm" className="text-red-600 hover:bg-red-50" onClick={() => handleShowTripRoute(row, idx)} disabled={loadingTripRoute === idx.toString()}>
+                              {loadingTripRoute === idx.toString() ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4 mr-1" />}
+                              Show Map
+                            </Button>
                           </td>
                         </>
                       )}
