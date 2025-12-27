@@ -60,6 +60,12 @@ export async function updateDevice(id: string, device: any) {
     });
 }
 
+export async function deleteDevice(id: string | number) {
+    return fetchJson<any>(`/api/devices/${id}`, {
+        method: "DELETE",
+    });
+}
+
 export async function getDrivers() {
     return fetchJson<any[]>("/api/drivers");
 }

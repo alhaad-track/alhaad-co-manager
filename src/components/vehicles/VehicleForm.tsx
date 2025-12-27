@@ -68,6 +68,7 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
     const [currentAssignedUserId, setCurrentAssignedUserId] = useState<string | null>(null);
     const [assignedUsers, setAssignedUsers] = useState<any[]>([]);
     const [userToRemove, setUserToRemove] = useState<string | null>(null);
+    const [deleteVehicleConfirm, setDeleteVehicleConfirm] = useState(false);
 
     // Registration Details
     const [registrationNumber, setRegistrationNumber] = useState<string>(() => initialData?.attributes?.registrationNumber || "");
@@ -441,6 +442,22 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
             alert("Failed to save vehicle. Please check your inputs and connection.");
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!initialData?.id) return;
+        setIsLoading(true);
+        try {
+            const { deleteDevice } = await import("@/lib/api");
+            await deleteDevice(initialData.id);
+            router.push("/dashboard/vehicles");
+        } catch (error) {
+            console.error("Failed to delete vehicle", error);
+            alert("Failed to delete vehicle. Please try again.");
+            setIsLoading(false);
+        } finally {
+            setDeleteVehicleConfirm(false);
         }
     };
 
@@ -952,6 +969,18 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                                     <Link href="/dashboard/vehicles">
                                         <Button variant="outline" type="button">{readOnly ? "Back" : "Cancel"}</Button>
                                     </Link>
+                                    {!readOnly && isEditing && (
+                                        <Button
+                                            type="button"
+                                            variant="danger"
+                                            onClick={() => setDeleteVehicleConfirm(true)}
+                                            disabled={isLoading}
+                                            className="gap-2"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                            Delete
+                                        </Button>
+                                    )}
                                     {!readOnly && (
                                         <Button type="submit" disabled={isLoading} className="gap-2 bg-orange-600 hover:bg-orange-700 text-white">
                                             <Save className="w-4 h-4" />
@@ -1135,6 +1164,27 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                         </Button>
                         <Button variant="danger" onClick={confirmRemoveUser}>
                             Remove User
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Vehicle Delete Confirmation Dialog */}
+            <Dialog open={deleteVehicleConfirm} onOpenChange={setDeleteVehicleConfirm}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Delete Vehicle</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to delete <strong>{formData.name}</strong>? This action cannot be undone.
+                            All associated data including trip history will be permanently removed.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setDeleteVehicleConfirm(false)}>
+                            Cancel
+                        </Button>
+                        <Button variant="danger" onClick={handleDelete} disabled={isLoading}>
+                            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete Forever"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
