@@ -74,6 +74,37 @@ export async function getUsers(query?: string) {
     return fetchJson<any[]>(`/api/users${query ? `?${query}` : ""}`);
 }
 
+export async function getUser(id: string | number) {
+    // If specific endpoint exists, use it. Otherwise standard generic get.
+    // Traccar usually allows /api/users?userId=X or /api/users/id (sometimes)
+    // Best to use filter if not sure, but let's try direct if supported or fall back to array find if generic
+    // Actually Traccar API for single user is usually /api/users/{id} not supported always, usually /api/users?userId=
+    // Let's implement robustly.
+    return fetchJson<any>(`/api/users/${id}`).catch(() => null);
+}
+
+export async function createUser(user: any) {
+    return fetchJson<any>("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(user),
+    });
+}
+
+export async function updateUser(id: string | number, user: any) {
+    return fetchJson<any>(`/api/users/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(user),
+    });
+}
+
+export async function deleteUser(id: string | number) {
+    return fetchJson<any>(`/api/users/${id}`, {
+        method: "DELETE",
+    });
+}
+
 export async function getGeofences() {
     return fetchJson<any[]>("/api/geofences");
 }

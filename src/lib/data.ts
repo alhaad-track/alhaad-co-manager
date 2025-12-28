@@ -3,7 +3,28 @@ export interface User {
     name: string;
     email: string;
     role: "manager" | "user";
-    createdAt: string;
+    createdAt?: string;
+    // Extended Traccar Fields
+    phone?: string;
+    disabled?: boolean;
+    expirationTime?: string;
+    deviceLimit?: number;
+    userLimit?: number;
+    readonly?: boolean;
+    administrator?: boolean;
+    map?: string;
+    latitude?: number;
+    longitude?: number;
+    zoom?: number;
+    coordinateFormat?: string;
+    attributes?: Record<string, any>;
+    password?: string;
+
+    // Additional fields from error log
+    poiLayer?: string;
+    limitCommands?: boolean;
+    deviceReadonly?: boolean;
+    disableReports?: boolean;
 }
 
 export interface Vehicle {
@@ -67,9 +88,42 @@ export interface Driver {
 
 // Mock Data
 export const initialUsers: User[] = [
-    { id: "1", name: "Manager User", email: "manager@example.com", role: "manager", createdAt: "2023-01-01" },
-    { id: "2", name: "John Doe", email: "john@example.com", role: "user", createdAt: "2023-02-15" },
-    { id: "3", name: "Jane Smith", email: "jane@example.com", role: "user", createdAt: "2023-03-20" },
+    {
+        id: "1",
+        name: "Manager User",
+        email: "manager@example.com",
+        role: "manager",
+        createdAt: "2023-01-01",
+        phone: "+1234567890",
+        administrator: true,
+        limitCommands: false,
+        disableReports: false,
+        deviceReadonly: false,
+        attributes: {
+            speedUnit: "kn",
+            timezone: "Asia/Karachi"
+        }
+    },
+    {
+        id: "2",
+        name: "John Doe",
+        email: "john@example.com",
+        role: "user",
+        createdAt: "2023-02-15",
+        phone: "+9876543210",
+        administrator: false,
+        map: "google",
+        attributes: {
+            timezone: "UTC"
+        }
+    },
+    {
+        id: "3",
+        name: "Jane Smith",
+        email: "jane@example.com",
+        role: "user",
+        createdAt: "2023-03-20"
+    },
 ];
 
 export const initialDrivers: Driver[] = [
