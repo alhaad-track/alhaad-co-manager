@@ -119,7 +119,7 @@ export default function DashboardLayout({
                 </aside>
 
                 {/* Main Content */}
-                <main className="flex-1 overflow-auto h-[calc(100vh-65px)] md:h-screen">
+                <main className="flex-1 w-full">
                     <div className="p-4 md:p-8">
                         {children}
                     </div>

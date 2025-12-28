@@ -159,7 +159,7 @@ export default function UserForm({ initialData, isEditing = false, readOnly = fa
     );
 
     return (
-        <div className="flex flex-col min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
+        <div className="flex flex-col w-full">
             <div className="mb-6 flex items-center justify-between">
                 <div className="flex items-center">
                     <Link href="/dashboard/users">
