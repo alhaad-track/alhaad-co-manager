@@ -41,15 +41,52 @@ export interface SocketData {
     events?: any[];
 }
 
-export function useTraccarSocket(onData?: (data: SocketData) => void) {
+export function useTraccarSocket(onData?: (data: SocketData) => void, throttleMs: number = 2000) {
     const socketRef = useRef<WebSocket | null>(null);
     const [status, setStatus] = useState<"connecting" | "connected" | "disconnected" | "error">("disconnected");
 
     const onDataRef = useRef(onData);
 
+    // Buffer to store incoming updates between flushes
+    // We use Map to automatically deduplicate updates by ID (last write wins)
+    const bufferRef = useRef({
+        positions: new Map<number, TraccarPosition>(),
+        devices: new Map<number, TraccarDevice>(),
+    });
+
     useEffect(() => {
         onDataRef.current = onData;
     }, [onData]);
+
+    // Throttling / Batching Logic
+    useEffect(() => {
+        if (!throttleMs) return;
+
+        const interval = setInterval(() => {
+            const hasPositions = bufferRef.current.positions.size > 0;
+            const hasDevices = bufferRef.current.devices.size > 0;
+
+            if ((hasPositions || hasDevices) && onDataRef.current) {
+                // Convert Maps to Arrays
+                const payload: SocketData = {};
+
+                if (hasPositions) {
+                    payload.positions = Array.from(bufferRef.current.positions.values());
+                    bufferRef.current.positions.clear();
+                }
+
+                if (hasDevices) {
+                    payload.devices = Array.from(bufferRef.current.devices.values());
+                    bufferRef.current.devices.clear();
+                }
+
+                console.debug(`[Socket] Flushing batch: ${payload.positions?.length || 0} positions, ${payload.devices?.length || 0} devices`);
+                onDataRef.current(payload);
+            }
+        }, throttleMs);
+
+        return () => clearInterval(interval);
+    }, [throttleMs]);
 
     useEffect(() => {
         let isMounted = true;
@@ -91,7 +128,30 @@ export function useTraccarSocket(onData?: (data: SocketData) => void) {
                 socket.onmessage = (event) => {
                     try {
                         const data = JSON.parse(event.data);
-                        if (onDataRef.current) onDataRef.current(data);
+
+                        // Instead of dispatching immediately, add to buffer
+                        if (data.positions) {
+                            data.positions.forEach((pos: TraccarPosition) => {
+                                bufferRef.current.positions.set(pos.deviceId, pos);
+                            });
+                        }
+
+                        if (data.devices) {
+                            data.devices.forEach((dev: TraccarDevice) => {
+                                bufferRef.current.devices.set(dev.id, dev);
+                            });
+                        }
+
+                        // Events are usually critical, so we might want to pass them through immediately
+                        // or buffer them too. For now let's pass events immediately if need be, 
+                        // but the interface doesn't strictly use events yet. 
+                        // If 'events' key exists, we can dispatch it directly or add to buffer.
+                        // For simplicity, let's treat positions/devices as the high-volume data to throttle.
+
+                        if (data.events && onDataRef.current) {
+                            onDataRef.current({ events: data.events });
+                        }
+
                     } catch (err) {
                         console.error("Error parsing WebSocket message:", err);
                     }
