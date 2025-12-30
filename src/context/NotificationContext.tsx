@@ -8,6 +8,7 @@ interface NotificationContextType {
     removeNotification: (id: string) => void;
 
     alerts: Notification[]; // History Log
+    removeAlert: (id: string) => void; // Delete individual alert
     clearAlerts: () => void;
 }
 
@@ -45,6 +46,10 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         setNotifications((prev) => prev.filter((n) => n.id !== id));
     }, []);
 
+    const removeAlert = useCallback((id: string) => {
+        setAlerts((prev) => prev.filter((n) => n.id !== id));
+    }, []);
+
     const clearAlerts = useCallback(() => {
         setAlerts([]);
     }, []);
@@ -54,6 +59,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             addNotification,
             removeNotification,
             alerts,
+            removeAlert,
             clearAlerts
         }}>
             {children}

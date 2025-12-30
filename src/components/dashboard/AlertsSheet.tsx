@@ -7,7 +7,7 @@ import { useNotification } from "@/context/NotificationContext";
 import { cn } from "@/lib/utils";
 
 export default function AlertsSheet() {
-    const { alerts, clearAlerts, removeNotification } = useNotification();
+    const { alerts, clearAlerts, removeAlert } = useNotification();
 
     return (
         <Sheet>
@@ -30,7 +30,7 @@ export default function AlertsSheet() {
                             onClick={clearAlerts}
                         >
                             <Trash2 className="w-4 h-4 mr-2" />
-                            Clear
+                            Clear All
                         </Button>
                     )}
                 </SheetHeader>
@@ -45,13 +45,20 @@ export default function AlertsSheet() {
                             <div
                                 key={alert.id}
                                 className={cn(
-                                    "p-4 rounded-lg border bg-white shadow-sm relative group",
+                                    "p-4 rounded-lg border bg-white shadow-sm relative group transition-all hover:shadow-md",
                                     alert.type === "error" ? "border-red-200 bg-red-50/50" :
                                         alert.type === "warning" ? "border-orange-200 bg-orange-50/50" :
                                             "border-gray-200"
                                 )}
                             >
-                                <div className="flex justify-between items-start mb-1">
+                                <button
+                                    onClick={() => removeAlert(alert.id)}
+                                    className="absolute top-2 right-2 p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    aria-label="Delete Notification"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                                <div className="flex justify-between items-start mb-1 pr-6">
                                     <h4 className={cn(
                                         "font-semibold text-sm",
                                         alert.type === "error" ? "text-red-700" :
@@ -61,7 +68,6 @@ export default function AlertsSheet() {
                                         {alert.title}
                                     </h4>
                                     <span className="text-xs text-gray-400">
-                                        {/* Timestamp could be added to Notification object, for now just static or relative */}
                                         Just now
                                     </span>
                                 </div>
