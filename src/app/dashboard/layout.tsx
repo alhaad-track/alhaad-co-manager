@@ -8,6 +8,10 @@ import { Users, Car, Map, LogOut, LayoutDashboard, Hexagon, User, Bell, FileText
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { StoreProvider } from "@/context/StoreContext";
+import { SocketProvider } from "@/context/SocketContext";
+import { NotificationProvider } from "@/context/NotificationContext";
+import LiveAlertsListener from "@/components/dashboard/LiveAlertsListener";
+import AlertsSheet from "@/components/dashboard/AlertsSheet";
 
 export default function DashboardLayout({
     children,
@@ -93,38 +97,52 @@ export default function DashboardLayout({
     );
 
     return (
-        <StoreProvider>
-            <div className="min-h-screen bg-gray-100 flex flex-col md:flex-row">
-                {/* Mobile Header */}
-                <div className="md:hidden bg-white border-b border-gray-200 p-4 flex items-center justify-start gap-4 sticky top-0 z-20">
-                    <Sheet open={open} onOpenChange={setOpen}>
-                        <SheetTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                                <Menu className="w-6 h-6" />
-                            </Button>
-                        </SheetTrigger>
-                        <SheetContent side="left" className="p-0 w-72">
+        <SocketProvider>
+            <StoreProvider>
+                <NotificationProvider>
+                    <LiveAlertsListener />
+                    <div className="min-h-screen bg-gray-100 flex flex-col md:flex-row">
+                        {/* Mobile Header */}
+                        <div className="md:hidden bg-white border-b border-gray-200 p-4 flex items-center justify-between sticky top-0 z-20">
+                            <div className="flex items-center gap-4">
+                                <Sheet open={open} onOpenChange={setOpen}>
+                                    <SheetTrigger asChild>
+                                        <Button variant="ghost" size="icon">
+                                            <Menu className="w-6 h-6" />
+                                        </Button>
+                                    </SheetTrigger>
+                                    <SheetContent side="left" className="p-0 w-72">
+                                        <SidebarContent />
+                                    </SheetContent>
+                                </Sheet>
+                                <div className="flex items-center gap-2 font-bold text-orange-600">
+                                    <Car className="w-6 h-6" />
+                                    Alhaad Track
+                                </div>
+                            </div>
+                            <AlertsSheet />
+                        </div>
+
+                        {/* Desktop Sidebar */}
+                        <aside className="hidden md:flex w-64 bg-white border-r border-gray-200 flex-col h-screen sticky top-0">
                             <SidebarContent />
-                        </SheetContent>
-                    </Sheet>
-                    <div className="flex items-center gap-2 font-bold text-orange-600">
-                        <Car className="w-6 h-6" />
-                        Alhaad Track
-                    </div>
-                </div>
+                        </aside>
 
-                {/* Desktop Sidebar */}
-                <aside className="hidden md:flex w-64 bg-white border-r border-gray-200 flex-col h-screen sticky top-0">
-                    <SidebarContent />
-                </aside>
+                        {/* Main Content */}
+                        <main className="flex-1 w-full flex flex-col h-screen overflow-hidden">
+                            {/* Desktop Header for Quick Actions */}
+                            <header className="hidden md:flex items-center justify-end p-4 bg-white border-b border-gray-200 shadow-sm">
+                                <AlertsSheet />
+                            </header>
 
-                {/* Main Content */}
-                <main className="flex-1 w-full">
-                    <div className="p-4 md:p-8">
-                        {children}
+                            {/* Scrollable Content Area */}
+                            <div className="flex-1 overflow-auto p-4 md:p-8">
+                                {children}
+                            </div>
+                        </main>
                     </div>
-                </main>
-            </div>
-        </StoreProvider>
+                </NotificationProvider>
+            </StoreProvider>
+        </SocketProvider>
     );
 }
