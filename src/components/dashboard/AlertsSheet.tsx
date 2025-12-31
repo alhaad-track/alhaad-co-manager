@@ -68,7 +68,7 @@ export default function AlertsSheet() {
                                         {alert.title}
                                     </h4>
                                     <span className="text-xs text-gray-400">
-                                        Just now
+                                        {alert.timestamp ? new Date(alert.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
                                     </span>
                                 </div>
                                 <p className="text-sm text-gray-600 leading-relaxed">

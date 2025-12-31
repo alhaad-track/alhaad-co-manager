@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, useCallback } from "react";
 import { Toast, Notification, NotificationType } from "@/components/ui/Toast";
 
 interface NotificationContextType {
-    addNotification: (type: NotificationType, title: string, message: string, duration?: number) => void;
+    addNotification: (type: NotificationType, title: string, message: string, duration?: number, timestamp?: string) => void;
     removeNotification: (id: string) => void;
 
     alerts: Notification[]; // History Log
@@ -30,10 +30,12 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         type: NotificationType,
         title: string,
         message: string,
-        duration = 5000
+        duration = 5000,
+        timestamp?: string
     ) => {
         const id = Math.random().toString(36).substring(2, 9);
-        const newNotif: Notification = { id, type, title, message, duration };
+        const finalTimestamp = timestamp || new Date().toISOString();
+        const newNotif: Notification = { id, type, title, message, duration, timestamp: finalTimestamp };
 
         // Add to Active Toasts
         setNotifications((prev) => [...prev, newNotif]);

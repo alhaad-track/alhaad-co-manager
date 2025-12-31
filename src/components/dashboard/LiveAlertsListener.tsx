@@ -53,20 +53,28 @@ export default function LiveAlertsListener() {
                             title = "Alarm Alert";
                             break;
                         case "geofenceEnter":
+                            type = "warning";
+                            title = "Entered Geofence";
+                            break;
                         case "geofenceExit":
                             type = "warning";
-                            title = "Geofence Alert";
+                            title = "Exited Geofence";
                             break;
                         default:
                             title = event.type.replace(/([A-Z])/g, ' $1').trim();
                             break;
                     }
 
-                    const message = event.attributes?.alarm
-                        ? `Alarm: ${event.attributes.alarm} (Device #${event.deviceId})`
-                        : `Device #${event.deviceId}: ${title}`;
+                    let messageBody = event.attributes?.message || event.attributes?.alarm || title;
 
-                    addNotification(type, title, message, 6000);
+                    let message = `Device #${event.deviceId}: ${messageBody}`;
+
+                    if (event.geofenceId) {
+                        message += ` (Geofence #${event.geofenceId})`;
+                    }
+
+                    // Traccar events usually have serverTime or eventTime
+                    addNotification(type, title, message, 6000, event.eventTime || event.serverTime);
                 }
             });
 
