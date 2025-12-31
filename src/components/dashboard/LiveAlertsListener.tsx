@@ -1,26 +1,34 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useTraccarSocket, SocketData } from "@/hooks/useTraccarSocket";
+import { useTraccarSocket } from "@/hooks/useTraccarSocket";
+import { SocketData } from "@/types/traccar";
 import { useNotification } from "@/context/NotificationContext";
 
 export default function LiveAlertsListener() {
     const { addNotification } = useNotification();
-
-    // Track processed event IDs to prevent duplicate alerts if socket reconnects or sends redundant data
     const processedEvents = useRef<Set<number>>(new Set());
+    const audioRef = useRef<HTMLAudioElement | null>(null);
 
-    // Connect to socket with NO throttle for alerts (immediate)
-    // We strictly care about 'events' here.
+    useEffect(() => {
+        // Initialize Audio (Preload)
+        // Using a generic notification sound (Glass Ping or similar)
+        // Alternative: /sounds/notification.mp3 if user had one, but we use a remote one for now.
+        // Let's use a Data URI for a simple beep or a reliable CDN link. 
+        // Using a distinct "Ping" sound.
+        audioRef.current = new Audio("https://codeskulptor-demos.commondatastorage.googleapis.com/pang/pop.mp3");
+    }, []);
+
     useTraccarSocket((data: SocketData) => {
         if (data.events && data.events.length > 0) {
+            console.log("[LiveAlerts] Received events:", data.events);
+
+            let hasNewEvent = false;
+
             data.events.forEach((event: any) => {
                 if (!processedEvents.current.has(event.id)) {
                     processedEvents.current.add(event.id);
-
-                    // Determine Type
-                    // Traccar event types: deviceOnline, deviceOffline, deviceMoving, deviceStopped, 
-                    // alarm, geofenceEnter, geofenceExit, etc.
+                    hasNewEvent = true;
 
                     let type: "info" | "success" | "warning" | "error" = "info";
                     let title = "Event";
@@ -50,11 +58,10 @@ export default function LiveAlertsListener() {
                             title = "Geofence Alert";
                             break;
                         default:
-                            title = event.type.replace(/([A-Z])/g, ' $1').trim(); // camelCase to Normal Text
+                            title = event.type.replace(/([A-Z])/g, ' $1').trim();
                             break;
                     }
 
-                    // For alarms, the specific alarm type (e.g., "sos", "shock") is usually in attributes[alarm]
                     const message = event.attributes?.alarm
                         ? `Alarm: ${event.attributes.alarm} (Device #${event.deviceId})`
                         : `Device #${event.deviceId}: ${title}`;
@@ -63,12 +70,16 @@ export default function LiveAlertsListener() {
                 }
             });
 
-            // Cleanup old events from Set to prevent memory leak (optional, kept simple for now)
+            // Play Sound if at least one new event
+            if (hasNewEvent && audioRef.current) {
+                audioRef.current.play().catch(err => console.error("Audio play failed:", err));
+            }
+
             if (processedEvents.current.size > 1000) {
                 processedEvents.current.clear();
             }
         }
-    }, 0); // 0 throttle for immediate alerts!
+    }, 0);
 
-    return null; // This component renders nothing, just logic
+    return null;
 }

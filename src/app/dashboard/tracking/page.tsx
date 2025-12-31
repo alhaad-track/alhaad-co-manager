@@ -11,7 +11,8 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { List } from "lucide-react";
 import { traccarApi, getRoute } from "@/lib/api";
-import { useTraccarSocket, SocketData, TraccarPosition, TraccarDevice } from "@/hooks/useTraccarSocket";
+import { useTraccarSocket } from "@/hooks/useTraccarSocket";
+import { SocketData, TraccarPosition, TraccarDevice } from "@/types/traccar";
 
 // Interface for rich path data
 export interface TripPoint {

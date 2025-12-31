@@ -1,8 +1,8 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { traccarApi } from "@/lib/api";
-import { SocketData } from "@/hooks/useTraccarSocket";
+import { SocketData } from "@/types/traccar";
 
 interface SocketContextType {
     status: "connecting" | "connected" | "disconnected" | "error";
@@ -24,12 +24,13 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     const socketRef = useRef<WebSocket | null>(null);
     const subscribersRef = useRef<Set<(data: SocketData) => void>>(new Set());
 
-    const subscribe = (callback: (data: SocketData) => void) => {
+    // Memoize subscribe to ensure stable identity and prevent effect re-execution downstream
+    const subscribe = useCallback((callback: (data: SocketData) => void) => {
         subscribersRef.current.add(callback);
         return () => {
             subscribersRef.current.delete(callback);
         };
-    };
+    }, []);
 
     useEffect(() => {
         let isMounted = true;
@@ -111,8 +112,10 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         };
     }, []);
 
+    const value = useMemo(() => ({ status, subscribe }), [status, subscribe]);
+
     return (
-        <SocketContext.Provider value={{ status, subscribe }}>
+        <SocketContext.Provider value={value}>
             {children}
         </SocketContext.Provider>
     );
