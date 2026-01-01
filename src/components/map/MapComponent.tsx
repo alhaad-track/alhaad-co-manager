@@ -99,14 +99,18 @@ function MapController({ selectedVehicle }: { selectedVehicle?: Vehicle | null }
 
     useEffect(() => {
         if (selectedVehicle) {
-            map.flyTo([selectedVehicle.lat, selectedVehicle.lng], 15, {
-                duration: 1.5
+            // Use setView with current zoom to prevent auto-zoom out
+            // animation: true makes it smooth (pan)
+            map.setView([selectedVehicle.lat, selectedVehicle.lng], map.getZoom(), {
+                animate: true
             });
         }
     }, [selectedVehicle, map]);
 
     return null;
 }
+
+
 
 function ZoomHandler({ setZoom }: { setZoom: (z: number) => void }) {
     const map = useMapEvents({
@@ -192,7 +196,7 @@ const MovingMarker = ({ position, icon, children, onSelect, onDoubleClick }: { p
 
     const requestRef = useRef<number | null>(null);
     const startTimeRef = useRef<number | null>(null);
-    const duration = 4000; // 4 seconds animation (Smooth motion)
+    const duration = 2000; // 2 seconds animation (Matches socket throttle)
 
     useEffect(() => {
         const marker = markerRef.current;
