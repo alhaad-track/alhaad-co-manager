@@ -109,6 +109,28 @@ export async function getGeofences() {
     return fetchJson<any[]>("/api/geofences");
 }
 
+export async function createGeofence(geofence: any) {
+    return fetchJson<any>("/api/geofences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(geofence),
+    });
+}
+
+export async function updateGeofence(id: string | number, geofence: any) {
+    return fetchJson<any>(`/api/geofences/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(geofence),
+    });
+}
+
+export async function deleteGeofence(id: string | number) {
+    return fetchJson<any>(`/api/geofences/${id}`, {
+        method: "DELETE",
+    });
+}
+
 export async function getEvents(params: URLSearchParams) {
     return fetchJson<any[]>(`/api/reports/events?${params.toString()}`);
 }

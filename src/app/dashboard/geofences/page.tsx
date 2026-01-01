@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { initialGeofences, Geofence } from "@/lib/data";
-import { traccarApi } from "@/lib/api";
+import { Geofence } from "@/lib/data";
+import { traccarApi, createGeofence, deleteGeofence, getGeofences } from "@/lib/api";
 import GeofenceMap from "@/components/map/GeofenceMap";
 import { GeofenceMapHandle } from "@/components/map/GeofenceMapComponent";
 import { Button } from "@/components/ui/button";
@@ -12,84 +12,68 @@ import Draggable from "react-draggable";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import GeofenceList from "@/components/geofences/GeofenceList";
+import { useNotification } from "@/context/NotificationContext";
 
 export default function GeofencesPage() {
     const [geofences, setGeofences] = useState<Geofence[]>([]);
+    const { addNotification } = useNotification();
+
+    const fetchGeofencesList = async () => {
+        try {
+            const data = await getGeofences();
+
+            const mappedGeofences: Geofence[] = data.map((g: any) => {
+                let type: "polygon" | "circle" = "polygon";
+                let coordinates: any = [];
+                let radius = 0;
+
+                const wkt = g.area || "";
+
+                if (wkt.startsWith("POLYGON")) {
+                    type = "polygon";
+                    const content = wkt.substring(wkt.indexOf("((") + 2, wkt.lastIndexOf("))"));
+                    const pairs = content.split(",");
+                    coordinates = pairs.map((pair: string) => {
+                        const parts = pair.trim().split(" ");
+                        const [p1, p2] = parts.map(parseFloat);
+                        return [p1, p2]; // Lat Lng
+                    });
+                } else if (wkt.startsWith("CIRCLE")) {
+                    type = "circle";
+                    const content = wkt.substring(wkt.indexOf("(") + 1, wkt.lastIndexOf(")"));
+                    const parts = content.split(",");
+                    if (parts.length >= 2) {
+                        const latLngParts = parts[0].trim().split(" ");
+                        const radiusPart = parts[1].trim();
+                        if (latLngParts.length === 2) {
+                            const p1 = parseFloat(latLngParts[0]);
+                            const p2 = parseFloat(latLngParts[1]);
+                            coordinates = [p1, p2];
+                            radius = parseFloat(radiusPart);
+                        }
+                    }
+                }
+
+                return {
+                    id: g.id.toString(),
+                    name: g.name,
+                    description: g.description,
+                    type,
+                    coordinates,
+                    radius: type === "circle" ? radius : undefined
+                };
+            });
+
+            setGeofences(mappedGeofences);
+        } catch (error) {
+            console.error("Failed to fetch geofences", error);
+        }
+    };
 
     useEffect(() => {
-        const fetchGeofences = async () => {
-            try {
-                const response = await traccarApi("/api/geofences");
-                if (response.ok) {
-                    const data = await response.json();
-
-                    const mappedGeofences: Geofence[] = data.map((g: any) => {
-                        let type: "polygon" | "circle" = "polygon";
-                        let coordinates: any = [];
-                        let radius = 0;
-
-                        // Basic WKT Parser
-                        // Example: POLYGON ((33.6 73.1, 33.6 73.2, ...)) or CIRCLE (33.6 73.1, 500)
-                        const wkt = g.area || "";
-
-                        if (wkt.startsWith("POLYGON")) {
-                            type = "polygon";
-                            const content = wkt.substring(wkt.indexOf("((") + 2, wkt.lastIndexOf("))"));
-                            const pairs = content.split(",");
-                            coordinates = pairs.map((pair: string) => {
-                                const [lat, lng] = pair.trim().split(" ").map(parseFloat);
-                                return [lat, lng]; // Leaflet uses [lat, lng]
-                            });
-                        } else if (wkt.startsWith("CIRCLE")) {
-                            type = "circle";
-                            // Basic Circle parsing - Traccar syntax might vary slightly
-                            // Assuming CIRCLE (lat lng, radius) or similar
-                            // Actually Traccar usually sends `area` as proper WKT. Standard WKT doesn't have CIRCLE but Traccar extends it.
-                            // Traccar stores key params in attributes or encoded area.
-                            // Let's look for standard patterns: "CIRCLE (33.633 72.918, 150)"
-                            const content = wkt.substring(wkt.indexOf("(") + 1, wkt.lastIndexOf(")"));
-                            const parts = content.split(",");
-                            if (parts.length >= 2) {
-                                const latLngParts = parts[0].trim().split(" ");
-                                const radiusPart = parts[1].trim();
-                                if (latLngParts.length === 2) {
-                                    const lat = parseFloat(latLngParts[0]); // Traccar often does LAT then LNG for circle center in common descriptions, or LNG LAT.
-                                    // Usually WKT is LON LAT. Let's assume LON LAT order for standard WKT consistency unless proven otherwise.
-                                    // Wait, for standard WKT POLYGON it is LON LAT.
-                                    // Let's assume parsed coords: [lat, lng] from [p1, p2].
-
-                                    // RE-CHECK: Typically WKT is LON LAT.
-                                    // So [p1(lon), p2(lat)] -> return [p2, p1] for Leaflet.
-
-                                    const p1 = parseFloat(latLngParts[0]);
-                                    const p2 = parseFloat(latLngParts[1]);
-
-                                    // Assuming LAT LON
-                                    coordinates = [p1, p2];
-                                    radius = parseFloat(radiusPart);
-                                }
-                            }
-                        }
-
-                        return {
-                            id: g.id.toString(),
-                            name: g.name,
-                            description: g.description,
-                            type,
-                            coordinates,
-                            radius: type === "circle" ? radius : undefined
-                        };
-                    });
-
-                    setGeofences(mappedGeofences);
-                }
-            } catch (error) {
-                console.error("Failed to fetch geofences", error);
-            }
-        };
-
-        fetchGeofences();
+        fetchGeofencesList();
     }, []);
+
     const [newGeofenceName, setNewGeofenceName] = useState("");
     const [search, setSearch] = useState("");
     const [selectedGeofenceIds, setSelectedGeofenceIds] = useState<string[]>([]);
@@ -108,14 +92,46 @@ export default function GeofencesPage() {
         setIsNameDialogOpen(true);
     };
 
-    const saveGeofence = () => {
+    const saveGeofence = async () => {
         if (!pendingGeofence) return;
 
-        const id = Math.random().toString(36).substr(2, 9);
         const name = newGeofenceName.trim() || "Unnamed Geofence";
+        // WKT Generation
+        let area = "";
+        if (pendingGeofence.type === "polygon") {
+            // Construct WKT: POLYGON ((lat1 lon1, lat2 lon2, ..., lat1 lon1))
+            // Ensure closed loop
+            const coords = pendingGeofence.coordinates as [number, number][];
+            if (coords.length > 0) {
+                const points = coords.map(c => `${c[0]} ${c[1]}`).join(", ");
+                // Close the loop if not already
+                const first = coords[0];
+                const last = coords[coords.length - 1];
+                const closedPoints = (first[0] === last[0] && first[1] === last[1])
+                    ? points
+                    : `${points}, ${first[0]} ${first[1]}`;
 
-        setGeofences([...geofences, { ...pendingGeofence, id, name }]);
-        setSelectedGeofenceIds(prev => [...prev, id]);
+                area = `POLYGON ((${closedPoints}))`;
+            }
+        } else if (pendingGeofence.type === "circle") {
+            // CIRCLE (lat lon, radius)
+            const center = pendingGeofence.coordinates as [number, number];
+            const radius = pendingGeofence.radius || 0;
+            area = `CIRCLE (${center[0]} ${center[1]}, ${radius})`;
+        }
+
+        try {
+            await createGeofence({
+                name,
+                area,
+                description: ""
+            });
+            addNotification("success", "Geofence Created", `Geofence "${name}" has been saved.`);
+            fetchGeofencesList(); // Refresh
+        } catch (e) {
+            console.error("Error creating geofence", e);
+            addNotification("error", "Error", "Failed to save geofence.");
+        }
 
         setIsNameDialogOpen(false);
         setPendingGeofence(null);
@@ -139,10 +155,18 @@ export default function GeofencesPage() {
         console.log("Geofence deleted:", id);
     };
 
-    const handleDeleteFromList = (e: React.MouseEvent, id: string) => {
+    const handleDeleteFromList = async (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
-        setGeofences(geofences.filter(g => g.id !== id));
-        setSelectedGeofenceIds(prev => prev.filter(selectedId => selectedId !== id));
+        if (!confirm("Are you sure you want to delete this geofence?")) return;
+
+        try {
+            await deleteGeofence(id);
+            addNotification("success", "Geofence Deleted", "Geofence has been removed.");
+            fetchGeofencesList();
+        } catch (e) {
+            console.error("Delete failed", e);
+            addNotification("error", "Error", "Failed to delete geofence.");
+        }
     };
 
     const toggleSelection = (id: string) => {
@@ -156,8 +180,6 @@ export default function GeofencesPage() {
 
     return (
         <div className="h-[calc(100vh-6rem)] flex flex-col relative">
-            {/* Removed floating input */}
-
             <div className="flex-1 relative overflow-hidden rounded-xl border border-gray-200 shadow-sm">
                 {/* Map */}
                 <div className="absolute inset-0 z-0">
