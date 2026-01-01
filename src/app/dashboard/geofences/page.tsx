@@ -155,17 +155,25 @@ export default function GeofencesPage() {
         console.log("Geofence deleted:", id);
     };
 
-    const handleDeleteFromList = async (e: React.MouseEvent, id: string) => {
+    const [geofenceToDelete, setGeofenceToDelete] = useState<string | null>(null);
+
+    const handleDeleteFromList = (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
-        if (!confirm("Are you sure you want to delete this geofence?")) return;
+        setGeofenceToDelete(id);
+    };
+
+    const confirmDelete = async () => {
+        if (!geofenceToDelete) return;
 
         try {
-            await deleteGeofence(id);
+            await deleteGeofence(geofenceToDelete);
             addNotification("success", "Geofence Deleted", "Geofence has been removed.");
             fetchGeofencesList();
         } catch (e) {
             console.error("Delete failed", e);
             addNotification("error", "Error", "Failed to delete geofence.");
+        } finally {
+            setGeofenceToDelete(null);
         }
     };
 
@@ -257,6 +265,22 @@ export default function GeofencesPage() {
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsNameDialogOpen(false)}>Cancel</Button>
                         <Button onClick={saveGeofence} className="bg-orange-600 hover:bg-orange-700 text-white">Save Geofence</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={!!geofenceToDelete} onOpenChange={(open) => !open && setGeofenceToDelete(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Delete Geofence</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to delete this geofence? This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setGeofenceToDelete(null)}>Cancel</Button>
+                        <Button variant="danger" onClick={confirmDelete}>Delete</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

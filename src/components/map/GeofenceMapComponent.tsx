@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useRef, forwardRef, useImperativeHandle } from "react";
-import { MapContainer, TileLayer, FeatureGroup, Circle, Polygon, Popup, useMap, LayersControl } from "react-leaflet";
+import { MapContainer, TileLayer, FeatureGroup, Circle, Polygon, Popup, useMap, LayersControl, ZoomControl } from "react-leaflet";
 import { EditControl } from "react-leaflet-draw";
 import "leaflet/dist/leaflet.css";
 import "leaflet-draw/dist/leaflet.draw.css";
 import L from "leaflet";
 import { Geofence } from "@/lib/data";
+import MapSearchControl from "./MapSearchControl";
 
 // Fix Leaflet icon issue
 const iconUrl = "https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png";
@@ -125,9 +126,9 @@ const GeofenceMapComponent = forwardRef<GeofenceMapHandle, GeofenceMapComponentP
         <MapContainer
             center={[51.505, -0.09]}
             zoom={13}
+            zoomControl={false}
             style={{ height: "100%", width: "100%" }}
         >
-            <MapRef />
             <LayersControl position="topright">
                 <LayersControl.BaseLayer name="OpenStreetMap">
                     <TileLayer
@@ -154,6 +155,9 @@ const GeofenceMapComponent = forwardRef<GeofenceMapHandle, GeofenceMapComponentP
                     />
                 </LayersControl.BaseLayer>
             </LayersControl>
+            <ZoomControl position="topright" />
+            <MapRef />
+            <MapSearchControl style={{ marginTop: '295px' }} />
             <MapController selectedGeofenceIds={selectedGeofenceIds} geofences={geofences} />
             <FeatureGroup ref={featureGroupRef}>
                 <EditControl

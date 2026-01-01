@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap, LayersControl, Polyline, CircleMarker, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, useMap, LayersControl, Polyline, CircleMarker, useMapEvents, ZoomControl } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { reverseGeocode } from "@/lib/api";
 import { Vehicle, mockTripPaths } from "@/lib/data";
 import { Car, Truck, Bus, Bike, Box, Anchor, Plane, User, Leaf, Tractor, Ship } from "lucide-react";
 import { renderToStaticMarkup } from "react-dom/server";
+import MapSearchControl from "./MapSearchControl";
 
 // Fix Leaflet icon issue
 const iconUrl = "https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png";
@@ -426,8 +427,7 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
     })();
 
     return (
-        <MapContainer center={[51.505, -0.09]} zoom={13} style={{ height: "100%", width: "100%" }}>
-            <ZoomHandler setZoom={setZoom} />
+        <MapContainer center={[51.505, -0.09]} zoom={13} zoomControl={false} style={{ height: "100%", width: "100%" }}>
             <LayersControl position="topright">
                 <LayersControl.BaseLayer name="OpenStreetMap">
                     <TileLayer
@@ -454,6 +454,9 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
                     />
                 </LayersControl.BaseLayer>
             </LayersControl>
+            <ZoomControl position="topright" />
+            <ZoomHandler setZoom={setZoom} />
+            <MapSearchControl />
 
             <MapController selectedVehicle={selectedVehicle} />
 
