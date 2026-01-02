@@ -53,7 +53,7 @@ export interface Vehicle {
 export interface Geofence {
     id: string;
     name: string;
-    type: "polygon" | "circle";
+    type: "polygon" | "circle" | "polyline";
     coordinates: any; // Leaflet format
     radius?: number; // For circles
     description?: string;

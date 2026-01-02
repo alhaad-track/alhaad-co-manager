@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, forwardRef, useImperativeHandle } from "react";
-import { MapContainer, TileLayer, FeatureGroup, Circle, Polygon, Popup, useMap, LayersControl, ZoomControl } from "react-leaflet";
+import { MapContainer, TileLayer, FeatureGroup, Circle, Polygon, Polyline, Popup, useMap, LayersControl, ZoomControl } from "react-leaflet";
 import { EditControl } from "react-leaflet-draw";
 import "leaflet/dist/leaflet.css";
 import "leaflet-draw/dist/leaflet.draw.css";
@@ -111,6 +111,14 @@ const GeofenceMapComponent = forwardRef<GeofenceMapHandle, GeofenceMapComponentP
                 coordinates: latlngs,
                 description: ""
             });
+        } else if (type === 'polyline') {
+            const latlngs = layer.getLatLngs().map((ll: any) => [ll.lat, ll.lng]);
+            onGeofenceCreated({
+                name: "New Polyline Geofence",
+                type: "polyline",
+                coordinates: latlngs,
+                description: ""
+            });
         }
     };
 
@@ -167,7 +175,7 @@ const GeofenceMapComponent = forwardRef<GeofenceMapHandle, GeofenceMapComponentP
                     onDeleted={_onDeleted}
                     draw={{
                         rectangle: false,
-                        polyline: false,
+                        polyline: true,
                         circlemarker: false,
                         marker: false,
                         circle: true,
@@ -201,6 +209,19 @@ const GeofenceMapComponent = forwardRef<GeofenceMapHandle, GeofenceMapComponentP
                                     <div className="text-sm">{geofence.description}</div>
                                 </Popup>
                             </Polygon>
+                        );
+                    } else if (geofence.type === 'polyline') {
+                        return (
+                            <Polyline
+                                key={geofence.id}
+                                positions={geofence.coordinates}
+                                pathOptions={{ color: 'orange' }}
+                            >
+                                <Popup>
+                                    <div className="font-bold">{geofence.name}</div>
+                                    <div className="text-sm">{geofence.description}</div>
+                                </Popup>
+                            </Polyline>
                         );
                     }
                     return null;

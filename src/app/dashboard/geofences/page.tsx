@@ -23,7 +23,7 @@ export default function GeofencesPage() {
             const data = await getGeofences();
 
             const mappedGeofences: Geofence[] = data.map((g: any) => {
-                let type: "polygon" | "circle" = "polygon";
+                let type: "polygon" | "circle" | "polyline" = "polygon";
                 let coordinates: any = [];
                 let radius = 0;
 
@@ -52,6 +52,15 @@ export default function GeofencesPage() {
                             radius = parseFloat(radiusPart);
                         }
                     }
+                } else if (wkt.startsWith("LINESTRING")) {
+                    type = "polyline";
+                    const content = wkt.substring(wkt.indexOf("(") + 1, wkt.lastIndexOf(")"));
+                    const pairs = content.split(",");
+                    coordinates = pairs.map((pair: string) => {
+                        const parts = pair.trim().split(" ");
+                        const [p1, p2] = parts.map(parseFloat);
+                        return [p1, p2]; // Lat Lng
+                    });
                 }
 
                 return {
@@ -118,6 +127,13 @@ export default function GeofencesPage() {
             const center = pendingGeofence.coordinates as [number, number];
             const radius = pendingGeofence.radius || 0;
             area = `CIRCLE (${center[0]} ${center[1]}, ${radius})`;
+        } else if (pendingGeofence.type === "polyline") {
+            // LINESTRING (lat1 lon1, lat2 lon2, ...)
+            const coords = pendingGeofence.coordinates as [number, number][];
+            if (coords.length > 0) {
+                const points = coords.map(c => `${c[0]} ${c[1]}`).join(", ");
+                area = `LINESTRING (${points})`;
+            }
         }
 
         try {
