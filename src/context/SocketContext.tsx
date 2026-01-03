@@ -54,9 +54,8 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
 
                 if (!isMounted) return;
 
-                // 2. Connect Directly
-                const wsBaseUrl = process.env.NEXT_PUBLIC_TRACCAR_SOCKET_URL || "ws://144.21.50.12/api/socket";
-                const wsUrl = `${wsBaseUrl}?token=${tokenData}`;
+                // 1. Connect Directly
+                const wsUrl = `${process.env.NEXT_PUBLIC_TRACCAR_SOCKET_URL}?token=${tokenData}`;
                 console.log("[SocketContext] Connecting...");
 
                 const socket = new WebSocket(wsUrl);
