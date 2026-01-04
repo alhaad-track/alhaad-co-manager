@@ -163,7 +163,7 @@ const GeofenceMapComponent = forwardRef<GeofenceMapHandle, GeofenceMapComponentP
                     />
                 </LayersControl.BaseLayer>
             </LayersControl>
-            <ZoomControl position="topright" />
+
             <MapRef />
             <MapSearchControl style={{ marginTop: '295px' }} />
             <MapController selectedGeofenceIds={selectedGeofenceIds} geofences={geofences} />
@@ -227,6 +227,7 @@ const GeofenceMapComponent = forwardRef<GeofenceMapHandle, GeofenceMapComponentP
                     return null;
                 })}
             </FeatureGroup>
+            <ZoomControl position="topright" />
         </MapContainer>
     );
 });
