@@ -6,7 +6,7 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { reverseGeocode } from "@/lib/api";
 import { Vehicle, mockTripPaths } from "@/lib/data";
-import { Car, Truck, Bus, Bike, Box, Anchor, Plane, User, Leaf, Tractor, Ship } from "lucide-react";
+import { Car, Truck, Bus, Bike, Box, Anchor, Plane, User, Leaf, Tractor, Ship, Navigation } from "lucide-react";
 import { renderToStaticMarkup } from "react-dom/server";
 import MapSearchControl from "./MapSearchControl";
 
@@ -25,7 +25,6 @@ const customIcon = new L.Icon({
     shadowSize: [41, 41]
 });
 
-// Helper for speed color
 // Helper for speed color
 const getSpeedColor = (speed: number, maxSpeed?: number) => {
     // If speed exceeds device limit, show RED
@@ -92,6 +91,7 @@ export interface MapComponentProps {
     vehicles: Vehicle[];
     selectedVehicle?: Vehicle | null;
     onSelectVehicle?: (vehicle: Vehicle) => void;
+    onDoubleClickVehicle?: (vehicle: Vehicle) => void;
     livePath?: TripPoint[];
 }
 
@@ -121,6 +121,34 @@ function ZoomHandler({ setZoom }: { setZoom: (z: number) => void }) {
     });
     return null;
 }
+
+// Navigation Arrow Icon for Moving State
+const createNavigationArrowIcon = (rotation: number = 0) => {
+    // A clean white circle with a blue directional arrow
+    const iconHtml = renderToStaticMarkup(
+        <div style={{
+            transform: `rotate(${rotation}deg)`,
+            transition: 'transform 0.3s linear', // Smooth CSS rotation
+            width: '40px',
+            height: '40px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+        }}>
+            <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.3))' }}>
+                <path d="M20 2L35 35L20 28L5 35L20 2Z" fill="#2563EB" stroke="white" strokeWidth="3" strokeLinejoin="round" />
+            </svg>
+        </div>
+    );
+
+    return L.divIcon({
+        html: iconHtml,
+        className: "custom-nav-icon", // Use a class that doesn't add default styles
+        iconSize: [40, 40],
+        iconAnchor: [20, 20], // Center it
+        popupAnchor: [0, -20]
+    });
+};
 
 // Helper to create custom marker icon
 const createVehicleIcon = (type: string, category?: string) => {
@@ -174,30 +202,34 @@ const createVehicleIcon = (type: string, category?: string) => {
     if (iconType === 'ship' || iconType === 'boat') IconComponent = Ship;
 
     const iconHtml = renderToStaticMarkup(
-        <div className="bg-white rounded-full p-1 border-2 border-blue-600 shadow-md">
-            <IconComponent className="w-5 h-5 text-blue-600" />
+        <div className="bg-white rounded-full p-1.5 border-2 border-gray-100 shadow-md">
+            <IconComponent className="w-5 h-5 text-gray-700" />
         </div>
     );
 
     return L.divIcon({
         html: iconHtml,
         className: "custom-vehicle-icon",
-        iconSize: [32, 32],
-        iconAnchor: [16, 32],
-        popupAnchor: [0, -32]
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+        popupAnchor: [0, -20]
     });
 };
 
 // Smoothly moving marker
-const MovingMarker = ({ position, icon, children, onSelect, onDoubleClick }: { position: [number, number], icon: L.DivIcon, children: React.ReactNode, onSelect?: () => void, onDoubleClick?: () => void }) => {
+const MovingMarker = ({ position, rotation, icon, children, onSelect, onDoubleClick }: { position: [number, number], rotation: number, icon: L.DivIcon, children: React.ReactNode, onSelect?: () => void, onDoubleClick?: () => void }) => {
     const markerRef = useRef<L.Marker>(null);
-    // We only pass the initial position to the Marker component to prevent React Leaflet from forcing updates.
-    // We handle all position updates manually via setLatLng for animation.
     const [initialPos] = useState(position);
 
     const requestRef = useRef<number | null>(null);
     const startTimeRef = useRef<number | null>(null);
-    const duration = 2000; // 2 seconds animation (Matches socket throttle)
+
+    // Smooth Params
+    const duration = 1500; // Slightly faster than update rate to "catch up" if needed
+
+    // State for visual rotation to allow interpolation if needed
+    // However, for rotation, CSS transition in the icon itself is usually smoother and easier
+    // So we just pass the new icon with new rotation props.
 
     useEffect(() => {
         const marker = markerRef.current;
@@ -208,17 +240,14 @@ const MovingMarker = ({ position, icon, children, onSelect, onDoubleClick }: { p
             cancelAnimationFrame(requestRef.current);
         }
 
-        // Get current visual position to start animation from
-        // This prevents jumping back if an update arrives mid-animation
         const currentLatLng = marker.getLatLng();
         const startLat = currentLatLng.lat;
         const startLng = currentLatLng.lng;
 
-        // Target (new position)
         const targetLat = position[0];
         const targetLng = position[1];
 
-        // If practically same, skip
+        // Skip if very close
         if (Math.abs(startLat - targetLat) < 0.000001 && Math.abs(startLng - targetLng) < 0.000001) {
             return;
         }
@@ -228,9 +257,10 @@ const MovingMarker = ({ position, icon, children, onSelect, onDoubleClick }: { p
         const animate = (time: number) => {
             if (startTimeRef.current === null) startTimeRef.current = time;
             const elapsed = time - startTimeRef.current;
+            // Use ease-out for natural arrival
             const progress = Math.min(elapsed / duration, 1);
 
-            // Linear interpolation
+            // Simple Linear
             const lat = startLat + (targetLat - startLat) * progress;
             const lng = startLng + (targetLng - startLng) * progress;
 
@@ -248,22 +278,22 @@ const MovingMarker = ({ position, icon, children, onSelect, onDoubleClick }: { p
         return () => {
             if (requestRef.current) cancelAnimationFrame(requestRef.current);
         };
-    }, [position[0], position[1]]); // Trigger only when coordinates change
+    }, [position[0], position[1]]); // Trigger on position change
 
-    // Update icon if it changes
+    // Update icon when it changes (including rotation changes inside the icon HTML)
     useEffect(() => {
         if (markerRef.current) {
             markerRef.current.setIcon(icon);
         }
-    }, [icon]);
+    }, [icon, rotation]); // Re-apply if rotation changes
 
-    // Click handling with debounce to separate click vs dblclick
+    // Click handling
     const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     return (
         <Marker
             ref={markerRef}
-            position={initialPos} // Static initial position
+            position={initialPos}
             icon={icon}
             eventHandlers={{
                 click: () => {
@@ -291,14 +321,6 @@ const MovingMarker = ({ position, icon, children, onSelect, onDoubleClick }: { p
         </Marker>
     );
 };
-
-export interface MapComponentProps {
-    vehicles: Vehicle[];
-    selectedVehicle?: Vehicle | null;
-    onSelectVehicle?: (vehicle: Vehicle) => void;
-    onDoubleClickVehicle?: (vehicle: Vehicle) => void;
-    livePath?: TripPoint[];
-}
 
 export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicle, onDoubleClickVehicle, livePath }: MapComponentProps) {
     const selectedTrip = selectedVehicle ? mockTripPaths[selectedVehicle.id] : null;
@@ -553,35 +575,55 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
             )}
 
             {/* Render Vehicles with Smooth Motion */}
-            {vehicles.map((vehicle) => (
-                <MovingMarker
-                    key={vehicle.id}
-                    position={[vehicle.lat, vehicle.lng]}
-                    icon={createVehicleIcon(vehicle.icon || "default", vehicle.category)}
-                    onSelect={() => {
-                        if (onSelectVehicle) {
-                            onSelectVehicle(vehicle);
-                        }
-                    }}
-                    onDoubleClick={() => {
-                        if (onDoubleClickVehicle) {
-                            onDoubleClickVehicle(vehicle);
-                        }
-                    }}
-                >
-                    <Popup>
-                        <div className="p-1">
-                            <h3 className="font-bold">{vehicle.name}</h3>
-                            <p className="text-sm text-gray-600">{vehicle.model}</p>
-                            <p className="text-xs text-gray-500 mt-1">Status: {vehicle.status}</p>
-                            <p className="text-xs text-gray-500">Last update: {vehicle.lastUpdate}</p>
-                            {selectedVehicle?.id === vehicle.id && (
-                                <p className="text-xs text-blue-600 font-medium mt-1">Path Visible</p>
-                            )}
-                        </div>
-                    </Popup>
-                </MovingMarker>
-            ))}
+            {vehicles.map((vehicle) => {
+                // Determine which icon to use
+                // 1. If moving (status='moving' or speed > 0), use Navigation Arrow
+                // 2. Else use created Vehicle Icon
+
+                // Note: Traccar 'status' field isn't always reliable for 'moving' vs 'online', prefer speed or assume 'moving' status means moving.
+                // But let's check basic logic.
+                // Check if moving: Speed > 0.5 kn (approx 1 km/h) or Status is 'moving'
+                const speed = vehicle.speed || (selectedVehicle?.id === vehicle.id && livePath && livePath.length > 0 ? livePath[livePath.length - 1].speed : 0) || 0;
+                const isMoving = (vehicle.status === 'moving' || speed > 1) && vehicle.course !== undefined;
+
+                let icon;
+                if (isMoving && vehicle.course !== undefined) {
+                    icon = createNavigationArrowIcon(vehicle.course);
+                } else {
+                    icon = createVehicleIcon(vehicle.icon || "default", vehicle.category);
+                }
+
+                return (
+                    <MovingMarker
+                        key={vehicle.id}
+                        position={[vehicle.lat, vehicle.lng]}
+                        rotation={vehicle.course || 0}
+                        icon={icon}
+                        onSelect={() => {
+                            if (onSelectVehicle) {
+                                onSelectVehicle(vehicle);
+                            }
+                        }}
+                        onDoubleClick={() => {
+                            if (onDoubleClickVehicle) {
+                                onDoubleClickVehicle(vehicle);
+                            }
+                        }}
+                    >
+                        <Popup>
+                            <div className="p-1">
+                                <h3 className="font-bold">{vehicle.name}</h3>
+                                <p className="text-sm text-gray-600">{vehicle.model}</p>
+                                <p className="text-xs text-gray-500 mt-1">Status: {vehicle.status}</p>
+                                <p className="text-xs text-gray-500">Speed: {selectedVehicle?.id === vehicle.id && livePath && livePath.length > 0 ? ((livePath[livePath.length - 1].speed || 0) * 1.852).toFixed(1) + " km/h" : "-"}</p>
+                                {selectedVehicle?.id === vehicle.id && (
+                                    <p className="text-xs text-blue-600 font-medium mt-1">Live Tracking Active</p>
+                                )}
+                            </div>
+                        </Popup>
+                    </MovingMarker>
+                );
+            })}
         </MapContainer>
     );
 }

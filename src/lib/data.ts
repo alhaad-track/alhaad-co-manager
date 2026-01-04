@@ -37,6 +37,8 @@ export interface Vehicle {
     lastUpdate: string;
     lat: number;
     lng: number;
+    course?: number;
+    speed?: number;
     driverId?: string;
     assignedGeofenceIds?: string[];
     icon: "truck" | "car" | "van" | "bus" | "motorcycle" | "default";
