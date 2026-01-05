@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const TRACCAR_URL = "http://144.21.50.12";
+const TRACCAR_URL = process.env.NEXT_PUBLIC_TRACCAR_API_URL;
 
 async function fetchTraccar(path: string, headers: HeadersInit) {
     const res = await fetch(`${TRACCAR_URL}${path}`, {

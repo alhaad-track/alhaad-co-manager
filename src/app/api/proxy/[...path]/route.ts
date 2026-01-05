@@ -17,7 +17,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 }
 
 async function proxy(request: NextRequest, path: string[]) {
-    const baseUrl = process.env.NEXT_PUBLIC_TRACCAR_API_URL || "http://144.21.50.12";
+    const baseUrl = process.env.NEXT_PUBLIC_TRACCAR_API_URL;
     const targetUrl = `${baseUrl}/${path.join("/")}`;
     const searchParams = request.nextUrl.searchParams.toString();
     const finalUrl = searchParams ? `${targetUrl}?${searchParams}` : targetUrl;
