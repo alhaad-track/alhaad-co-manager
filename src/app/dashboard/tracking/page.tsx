@@ -27,6 +27,7 @@ export default function TrackingPage() {
     const [vehicles, setVehicles] = useState<Vehicle[]>([]);
     const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
     const [vehiclePaths, setVehiclePaths] = useState<Record<string, TripPoint[]>>({});
+    const [isFullHistoryMode, setIsFullHistoryMode] = useState(false);
     const nodeRef = useRef(null);
     const [isMobileListOpen, setIsMobileListOpen] = useState(false);
 
@@ -91,8 +92,21 @@ export default function TrackingPage() {
     useEffect(() => {
         if (!selectedVehicle?.id) return;
 
+        // Reset full history mode when selection changes (unless it was triggered by double click logic which sets it after? No, double click logic also selects)
+        // If we are already in full history mode for THIS vehicle (e.g. from double click), we might want to keep it?
+        // But usually selecting a new vehicle means "show me live default".
+        // The double click handler sets isFullHistoryMode(true).
+
         const loadHistory = async () => {
             try {
+                // If full history mode is active, we don't want to overwrite it with 1h history here?
+                // Actually, this effect runs when selectedVehicle object changes (e.g. position update).
+                // Or when ID changes.
+                // We should only reset mode if ID changes.
+
+                // Determining if ID changed is hard with just dependency array.
+                // But we can check if vehiclePaths entry is empty?
+
                 const to = new Date();
                 const from = new Date(to.getTime() - 60 * 60 * 1000); // 1 hour ago
                 const params = new URLSearchParams({
@@ -113,6 +127,10 @@ export default function TrackingPage() {
                     }));
 
                     setVehiclePaths(prev => {
+                        // Only update if we are NOT in full history mode? 
+                        // Or if we are, we probably just fetched a 1h slice which is smaller.
+                        // Ideally: if isFullHistoryMode is true, we SKIP this effect's update?
+                        // But wait, if new vehicle selected, isFullHistoryMode should be false.
                         return {
                             ...prev,
                             [selectedVehicle.id]: historyPath
@@ -124,7 +142,23 @@ export default function TrackingPage() {
             }
         };
 
-        loadHistory();
+        // loadHistory(); 
+        // Logic conflict: double click sets paths. This effect overwrites it?
+        // We should control this better.
+        // Let's modify handleSelectVehicle to reset mode.
+        // And inside this effect, if mode is true, MAYBE don't overwrite?
+
+        // But if I select Vehicle B, mode resets to false. Then this effect runs and loads 1h. Correct.
+        // If I double click Vehicle B, handler runs, sets mode true, loads 24h. 
+        // This effect might also run if selectedVehicle changed.
+        // If double click happens, we set vehicle.
+
+        // Let's rely on handleSelectVehicle to reset the mode.
+        // And check mode here? No, mode state update might be async/batched.
+
+        // Simpler: Just let the effect run on ID change.
+        // But we need to separate "Initial Load" vs "Double Click Load".
+
     }, [selectedVehicle?.id]);
 
     // WebSocket Integration
@@ -200,7 +234,8 @@ export default function TrackingPage() {
         }
     });
 
-    const handleSelectVehicle = (vehicle: Vehicle) => {
+    const handleSelectVehicle = async (vehicle: Vehicle) => {
+        // Logic to toggle selection
         if (selectedVehicle?.id === vehicle.id) {
             setSelectedVehicle(null); // Deselect/Clear if already selected
             // Clear path from state to prevent flash next time
@@ -209,27 +244,56 @@ export default function TrackingPage() {
                 delete newPaths[vehicle.id];
                 return newPaths;
             });
-        } else {
-            // Clear any stale path for this vehicle before selecting
-            setVehiclePaths(prev => {
-                const newPaths = { ...prev };
-                delete newPaths[vehicle.id];
-                return newPaths;
-            });
-            setSelectedVehicle(vehicle);
+            setIsFullHistoryMode(false);
+            return;
         }
-        setIsMobileListOpen(false);
+
+        // New selection logic
+        setIsFullHistoryMode(false); // Reset to default live mode
+        setSelectedVehicle(vehicle);
+        setIsMobileListOpen(false); // Close mobile drawer
+
+        // Fetch 1h history immediately
+        try {
+            const to = new Date();
+            const from = new Date(to.getTime() - 60 * 60 * 1000);
+            const params = new URLSearchParams({
+                deviceId: vehicle.id,
+                from: from.toISOString(),
+                to: to.toISOString()
+            });
+
+            const route = await getRoute(params);
+            if (route && Array.isArray(route)) {
+                const historyPath: TripPoint[] = route.map((p: any) => ({
+                    latitude: p.latitude,
+                    longitude: p.longitude,
+                    speed: p.speed,
+                    course: p.course,
+                    fixTime: p.fixTime
+                }));
+
+                setVehiclePaths(prev => ({
+                    ...prev,
+                    [vehicle.id]: historyPath
+                }));
+            }
+        } catch (e) {
+            console.error("Failed to load initial history", e);
+        }
     };
 
+    // Double Click
     const handleDoubleClickVehicle = async (vehicle: Vehicle) => {
-        // Fetch full trip for today
+        setIsFullHistoryMode(true);
+        setSelectedVehicle(vehicle); // Ensure selected
+
+        // Fetch full day
         try {
-            // Set start of today
             const now = new Date();
             const from = new Date(now);
-            from.setHours(0, 0, 0, 0); // Start of day
-
-            const to = new Date(); // Now
+            from.setHours(0, 0, 0, 0);
+            const to = new Date();
 
             const params = new URLSearchParams({
                 deviceId: vehicle.id,
@@ -239,7 +303,6 @@ export default function TrackingPage() {
 
             const route = await getRoute(params);
             if (route && Array.isArray(route)) {
-                // Map to TripPoint
                 const historyPath: TripPoint[] = route.map((p: any) => ({
                     latitude: p.latitude,
                     longitude: p.longitude,
@@ -248,17 +311,10 @@ export default function TrackingPage() {
                     fixTime: p.fixTime
                 }));
 
-                setVehiclePaths(prev => {
-                    return {
-                        ...prev,
-                        [vehicle.id]: historyPath
-                    };
-                });
-
-                // Also ensure vehicle is selected
-                if (selectedVehicle?.id !== vehicle.id) {
-                    setSelectedVehicle(vehicle);
-                }
+                setVehiclePaths(prev => ({
+                    ...prev,
+                    [vehicle.id]: historyPath
+                }));
             }
         } catch (e) {
             console.error("Failed to load full day history", e);
@@ -280,6 +336,7 @@ export default function TrackingPage() {
                         onSelectVehicle={handleSelectVehicle}
                         onDoubleClickVehicle={handleDoubleClickVehicle}
                         livePath={selectedVehicle ? vehiclePaths[selectedVehicle.id] : undefined}
+                        showFullHistory={isFullHistoryMode}
                     />
                 </div>
 
