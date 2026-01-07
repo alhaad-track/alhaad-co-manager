@@ -348,6 +348,7 @@ export default function TrackingPage() {
                         livePath={selectedVehicle ? vehiclePaths[selectedVehicle.id] : undefined}
                         showFullHistory={isFullHistoryMode}
                         onSendCommand={handleSendCommandTrigger}
+                        onShowHistory={handleDoubleClickVehicle}
                     />
                 </div>
 

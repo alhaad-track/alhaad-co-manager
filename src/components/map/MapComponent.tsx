@@ -148,6 +148,7 @@ export interface MapComponentProps {
     livePath?: TripPoint[];
     showFullHistory?: boolean;
     onSendCommand?: (vehicle: Vehicle) => void;
+    onShowHistory?: (vehicle: Vehicle) => void;
 }
 
 function MapController({ selectedVehicle }: { selectedVehicle?: Vehicle | null }) {
@@ -490,7 +491,7 @@ const MovingMarker = ({ position, rotation, icon, timestamp, children, onSelect,
     );
 };
 
-export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicle, onDoubleClickVehicle, livePath, showFullHistory = false, onSendCommand }: MapComponentProps) {
+export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicle, onDoubleClickVehicle, livePath, showFullHistory = false, onSendCommand, onShowHistory }: MapComponentProps) {
     const selectedTrip = selectedVehicle ? mockTripPaths[selectedVehicle.id] : null;
     const [zoom, setZoom] = useState(13); // Default zoom
 
@@ -849,6 +850,17 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
                                     Send Command
                                 </button>
 
+
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (onShowHistory) onShowHistory(vehicle);
+                                    }}
+                                    className="mt-1 text-xs bg-green-50 text-green-600 hover:bg-green-100 px-2 py-1 rounded border border-green-200 transition-colors w-full text-center"
+                                >
+                                    Today Travel
+                                </button>
+
                                 {selectedVehicle?.id === vehicle.id && (
                                     <div className="mt-2 text-center bg-blue-50 py-1 rounded border border-blue-100">
                                         <p className="text-[10px] text-blue-600 font-medium">Live Tracking Active</p>
@@ -859,6 +871,6 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
                     </MovingMarker>
                 );
             })}
-        </MapContainer>
+        </MapContainer >
     );
 }
