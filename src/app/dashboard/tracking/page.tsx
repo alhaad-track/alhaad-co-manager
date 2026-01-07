@@ -13,6 +13,7 @@ import { List } from "lucide-react";
 import { traccarApi, getRoute } from "@/lib/api";
 import { useTraccarSocket } from "@/hooks/useTraccarSocket";
 import { SocketData, TraccarPosition, TraccarDevice } from "@/types/traccar";
+import CommandDialog from "@/components/tracking/CommandDialog";
 
 // Interface for rich path data
 export interface TripPoint {
@@ -30,6 +31,10 @@ export default function TrackingPage() {
     const [isFullHistoryMode, setIsFullHistoryMode] = useState(false);
     const nodeRef = useRef(null);
     const [isMobileListOpen, setIsMobileListOpen] = useState(false);
+
+    // Command Dialog State
+    const [commandDialogOpen, setCommandDialogOpen] = useState(false);
+    const [commandTargetVehicle, setCommandTargetVehicle] = useState<Vehicle | null>(null);
 
     // Initial Fetch (No polling)
     const fetchTrackingData = async () => {
@@ -321,6 +326,11 @@ export default function TrackingPage() {
         }
     };
 
+    const handleSendCommandTrigger = (vehicle: Vehicle) => {
+        setCommandTargetVehicle(vehicle);
+        setCommandDialogOpen(true);
+    };
+
     return (
         <div className="h-[calc(100vh-6rem)] flex flex-col relative">
             <div className="mb-4">
@@ -337,8 +347,15 @@ export default function TrackingPage() {
                         onDoubleClickVehicle={handleDoubleClickVehicle}
                         livePath={selectedVehicle ? vehiclePaths[selectedVehicle.id] : undefined}
                         showFullHistory={isFullHistoryMode}
+                        onSendCommand={handleSendCommandTrigger}
                     />
                 </div>
+
+                <CommandDialog
+                    isOpen={commandDialogOpen}
+                    onClose={() => setCommandDialogOpen(false)}
+                    vehicle={commandTargetVehicle}
+                />
 
                 {/* Mobile Vehicle List Trigger */}
                 <div className="absolute top-4 left-4 z-10 md:hidden">

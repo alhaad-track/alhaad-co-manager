@@ -183,4 +183,17 @@ export async function getPermissions(params?: URLSearchParams) {
 }
 
 
+export async function sendCommand(command: { deviceId: number; type: string; attributes?: any; description?: string }) {
+    return fetchJson<any>("/api/commands/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(command),
+    });
+}
+
+export async function getCommands(params?: URLSearchParams) {
+    const query = params ? `?${params.toString()}` : "";
+    return fetchJson<any[]>(`/api/commands${query}`);
+}
+
 

@@ -147,6 +147,7 @@ export interface MapComponentProps {
     onDoubleClickVehicle?: (vehicle: Vehicle) => void;
     livePath?: TripPoint[];
     showFullHistory?: boolean;
+    onSendCommand?: (vehicle: Vehicle) => void;
 }
 
 function MapController({ selectedVehicle }: { selectedVehicle?: Vehicle | null }) {
@@ -489,7 +490,7 @@ const MovingMarker = ({ position, rotation, icon, timestamp, children, onSelect,
     );
 };
 
-export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicle, onDoubleClickVehicle, livePath, showFullHistory = false }: MapComponentProps) {
+export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicle, onDoubleClickVehicle, livePath, showFullHistory = false, onSendCommand }: MapComponentProps) {
     const selectedTrip = selectedVehicle ? mockTripPaths[selectedVehicle.id] : null;
     const [zoom, setZoom] = useState(13); // Default zoom
 
@@ -837,6 +838,16 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
                                 </div>
 
                                 <ManualAddressDisplay lat={vehicle.lat} lng={vehicle.lng} />
+
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (onSendCommand) onSendCommand(vehicle);
+                                    }}
+                                    className="mt-2 text-xs bg-red-50 text-red-600 hover:bg-red-100 px-2 py-1 rounded border border-red-200 transition-colors w-full text-center"
+                                >
+                                    Send Command
+                                </button>
 
                                 {selectedVehicle?.id === vehicle.id && (
                                     <div className="mt-2 text-center bg-blue-50 py-1 rounded border border-blue-100">
