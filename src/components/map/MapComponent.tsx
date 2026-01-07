@@ -325,25 +325,34 @@ const MovingMarker = ({ position, rotation, icon, timestamp, children, onSelect,
                     const targetPoint = bufferRef.current[1];
 
                     // We remove startPoint, as we are now "departing" it.
-                    // Ideally check if we are physically close to startPoint?
-                    // For robustness, we assume we are at startPoint (or close enough) and glide to target.
-                    // If we drifted, we might snap or lerp?
-                    // Let's trust the sequence.
                     bufferRef.current.shift();
 
                     // Calculate Duration
-                    const timeDelta = targetPoint.time - startPoint.time;
-                    let duration = 2000; // Default smooth speed (2s)
+                    // For live tracking, we want to be responsive. We shouldn't use the historical `timeDelta` (e.g. 30s) as the visual duration.
+                    // Instead, we glide to the new point quickly (e.g. 1.5s or faster if backlog exists).
 
-                    // Use authentic time difference if reasonable (between 500ms and 60s)
-                    if (timeDelta > 500 && timeDelta < 60000) {
-                        duration = timeDelta;
+                    const backlog = bufferRef.current.length;
+
+                    // Base duration for a "nice" glide
+                    let duration = 1500;
+
+                    // If we have a backlog (more points coming in than we are showing), speed up!
+                    if (backlog > 2) {
+                        // processing 5 points? do each in 200ms
+                        duration = 1000 / (backlog / 2);
+                    } else if (backlog > 5) {
+                        duration = 100; // Super fast catchup
                     }
 
-                    // If buffer is getting too full (>4), speed up to catch up
-                    if (bufferRef.current.length > 4) {
-                        duration = Math.max(200, duration / 2);
-                    }
+                    // Lower bound (don't go instantly unless huge lag) and Upper bound (don't take forever)
+                    duration = Math.max(150, Math.min(duration, 2000));
+
+                    // Special case: If the distance is TINY, don't take 1.5s
+                    // const dist = Math.sqrt(Math.pow(targetPoint.lat - startPoint.lat, 2) + Math.pow(targetPoint.lng - startPoint.lng, 2));
+                    // if (dist < 0.0001) duration = 500; // Short hop
+
+                    // Note: We ignore targetPoint.time - startPoint.time for duration calculation
+                    // because we want "Live Sync", not "Historical Replay".
 
                     animationRef.current = {
                         startLat: startPoint.lat,
