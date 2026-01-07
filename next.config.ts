@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/api/proxy/socket',
-        destination: 'http://144.21.50.12/api/socket',
+        destination: `${process.env.NEXT_PUBLIC_TRACCAR_API_URL}/api/socket`,
       },
     ];
   },

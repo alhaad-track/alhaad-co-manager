@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useRef, forwardRef, useImperativeHandle } from "react";
-import { MapContainer, TileLayer, FeatureGroup, Circle, Polygon, Popup, useMap, LayersControl } from "react-leaflet";
+import { MapContainer, TileLayer, FeatureGroup, Circle, Polygon, Polyline, Popup, useMap, LayersControl, ZoomControl } from "react-leaflet";
 import { EditControl } from "react-leaflet-draw";
 import "leaflet/dist/leaflet.css";
 import "leaflet-draw/dist/leaflet.draw.css";
 import L from "leaflet";
 import { Geofence } from "@/lib/data";
+import MapSearchControl from "./MapSearchControl";
 
 // Fix Leaflet icon issue
 const iconUrl = "https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png";
@@ -110,6 +111,14 @@ const GeofenceMapComponent = forwardRef<GeofenceMapHandle, GeofenceMapComponentP
                 coordinates: latlngs,
                 description: ""
             });
+        } else if (type === 'polyline') {
+            const latlngs = layer.getLatLngs().map((ll: any) => [ll.lat, ll.lng]);
+            onGeofenceCreated({
+                name: "New Polyline Geofence",
+                type: "polyline",
+                coordinates: latlngs,
+                description: ""
+            });
         }
     };
 
@@ -125,9 +134,9 @@ const GeofenceMapComponent = forwardRef<GeofenceMapHandle, GeofenceMapComponentP
         <MapContainer
             center={[51.505, -0.09]}
             zoom={13}
+            zoomControl={false}
             style={{ height: "100%", width: "100%" }}
         >
-            <MapRef />
             <LayersControl position="topright">
                 <LayersControl.BaseLayer name="OpenStreetMap">
                     <TileLayer
@@ -154,6 +163,9 @@ const GeofenceMapComponent = forwardRef<GeofenceMapHandle, GeofenceMapComponentP
                     />
                 </LayersControl.BaseLayer>
             </LayersControl>
+
+            <MapRef />
+            <MapSearchControl style={{ marginTop: '295px' }} />
             <MapController selectedGeofenceIds={selectedGeofenceIds} geofences={geofences} />
             <FeatureGroup ref={featureGroupRef}>
                 <EditControl
@@ -163,7 +175,7 @@ const GeofenceMapComponent = forwardRef<GeofenceMapHandle, GeofenceMapComponentP
                     onDeleted={_onDeleted}
                     draw={{
                         rectangle: false,
-                        polyline: false,
+                        polyline: true,
                         circlemarker: false,
                         marker: false,
                         circle: true,
@@ -198,10 +210,24 @@ const GeofenceMapComponent = forwardRef<GeofenceMapHandle, GeofenceMapComponentP
                                 </Popup>
                             </Polygon>
                         );
+                    } else if (geofence.type === 'polyline') {
+                        return (
+                            <Polyline
+                                key={geofence.id}
+                                positions={geofence.coordinates}
+                                pathOptions={{ color: 'orange' }}
+                            >
+                                <Popup>
+                                    <div className="font-bold">{geofence.name}</div>
+                                    <div className="text-sm">{geofence.description}</div>
+                                </Popup>
+                            </Polyline>
+                        );
                     }
                     return null;
                 })}
             </FeatureGroup>
+            <ZoomControl position="topright" />
         </MapContainer>
     );
 });

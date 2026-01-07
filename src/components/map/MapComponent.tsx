@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap, LayersControl, Polyline, CircleMarker, useMapEvents } from "react-leaflet";
+import { useEffect, useState, useRef, useMemo } from "react";
+import { MapContainer, TileLayer, Marker, Popup, useMap, LayersControl, Polyline, CircleMarker, useMapEvents, ZoomControl } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { reverseGeocode } from "@/lib/api";
 import { Vehicle, mockTripPaths } from "@/lib/data";
-import { Car, Truck, Bus, Bike, Box, Anchor, Plane, User, Leaf, Tractor, Ship } from "lucide-react";
+import { Car, Truck, Bus, Bike, Box, Anchor, Plane, User, Leaf, Tractor, Ship, Navigation } from "lucide-react";
 import { renderToStaticMarkup } from "react-dom/server";
+import MapSearchControl from "./MapSearchControl";
 
 // Fix Leaflet icon issue
 const iconUrl = "https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png";
@@ -24,7 +25,6 @@ const customIcon = new L.Icon({
     shadowSize: [41, 41]
 });
 
-// Helper for speed color
 // Helper for speed color
 const getSpeedColor = (speed: number, maxSpeed?: number) => {
     // If speed exceeds device limit, show RED
@@ -91,7 +91,9 @@ export interface MapComponentProps {
     vehicles: Vehicle[];
     selectedVehicle?: Vehicle | null;
     onSelectVehicle?: (vehicle: Vehicle) => void;
+    onDoubleClickVehicle?: (vehicle: Vehicle) => void;
     livePath?: TripPoint[];
+    showFullHistory?: boolean;
 }
 
 function MapController({ selectedVehicle }: { selectedVehicle?: Vehicle | null }) {
@@ -99,14 +101,18 @@ function MapController({ selectedVehicle }: { selectedVehicle?: Vehicle | null }
 
     useEffect(() => {
         if (selectedVehicle) {
-            map.flyTo([selectedVehicle.lat, selectedVehicle.lng], 15, {
-                duration: 1.5
+            // Use setView with current zoom to prevent auto-zoom out
+            // animation: true makes it smooth (pan)
+            map.setView([selectedVehicle.lat, selectedVehicle.lng], map.getZoom(), {
+                animate: true
             });
         }
     }, [selectedVehicle, map]);
 
     return null;
 }
+
+
 
 function ZoomHandler({ setZoom }: { setZoom: (z: number) => void }) {
     const map = useMapEvents({
@@ -116,6 +122,34 @@ function ZoomHandler({ setZoom }: { setZoom: (z: number) => void }) {
     });
     return null;
 }
+
+// Navigation Arrow Icon for Moving State
+const createNavigationArrowIcon = (rotation: number = 0) => {
+    // A clean white circle with a blue directional arrow
+    const iconHtml = renderToStaticMarkup(
+        <div style={{
+            transform: `rotate(${rotation}deg)`,
+            transition: 'transform 0.3s linear', // Smooth CSS rotation
+            width: '40px',
+            height: '40px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+        }}>
+            <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.3))' }}>
+                <path d="M20 2L35 35L20 28L5 35L20 2Z" fill="#2563EB" stroke="white" strokeWidth="3" strokeLinejoin="round" />
+            </svg>
+        </div>
+    );
+
+    return L.divIcon({
+        html: iconHtml,
+        className: "custom-nav-icon", // Use a class that doesn't add default styles
+        iconSize: [40, 40],
+        iconAnchor: [20, 20], // Center it
+        popupAnchor: [0, -20]
+    });
+};
 
 // Helper to create custom marker icon
 const createVehicleIcon = (type: string, category?: string) => {
@@ -169,73 +203,209 @@ const createVehicleIcon = (type: string, category?: string) => {
     if (iconType === 'ship' || iconType === 'boat') IconComponent = Ship;
 
     const iconHtml = renderToStaticMarkup(
-        <div className="bg-white rounded-full p-1 border-2 border-blue-600 shadow-md">
-            <IconComponent className="w-5 h-5 text-blue-600" />
+        <div className="bg-white rounded-full p-1.5 border-2 border-gray-100 shadow-md">
+            <IconComponent className="w-5 h-5 text-gray-700" />
         </div>
     );
 
     return L.divIcon({
         html: iconHtml,
         className: "custom-vehicle-icon",
-        iconSize: [32, 32],
-        iconAnchor: [16, 32],
-        popupAnchor: [0, -32]
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+        popupAnchor: [0, -20]
     });
 };
 
-// Smoothly moving marker
-const MovingMarker = ({ position, icon, children, onSelect, onDoubleClick }: { position: [number, number], icon: L.DivIcon, children: React.ReactNode, onSelect?: () => void, onDoubleClick?: () => void }) => {
+// Smoothly moving marker with buffering
+const MovingMarker = ({ position, rotation, icon, timestamp, children, onSelect, onDoubleClick }: {
+    position: [number, number],
+    rotation: number,
+    icon: L.DivIcon,
+    timestamp?: number, // Timestamp of the point in ms
+    children: React.ReactNode,
+    onSelect?: () => void,
+    onDoubleClick?: () => void
+}) => {
     const markerRef = useRef<L.Marker>(null);
-    // We only pass the initial position to the Marker component to prevent React Leaflet from forcing updates.
-    // We handle all position updates manually via setLatLng for animation.
-    const [initialPos] = useState(position);
+
+    // Queue of target positions: { lat, lng, time, rotation }
+    const bufferRef = useRef<{ lat: number; lng: number; time: number; rotation: number }[]>([]);
+
+    // Current animation state
+    const animationRef = useRef<{
+        startLat: number;
+        startLng: number;
+        startTime: number;
+        duration: number;
+        targetLat: number;
+        targetLng: number;
+        targetRotation: number;
+        startRotation: number;
+    } | null>(null);
 
     const requestRef = useRef<number | null>(null);
-    const startTimeRef = useRef<number | null>(null);
-    const duration = 4000; // 4 seconds animation (Smooth motion)
+    const lastPositionRef = useRef(position);
 
+    // Initial setup: ensure marker is placed at initial position
+    // Use initialProps to avoid re-rendering marker when position prop changes, we handle it manually
+    const initialProps = useRef({ position, icon });
+
+    // Handle Icon Updates independently
+    useEffect(() => {
+        if (markerRef.current) {
+            markerRef.current.setIcon(icon);
+        }
+    }, [icon]);
+
+    // Add new position to buffer when props change
+    useEffect(() => {
+        const [lat, lng] = position;
+        const [prevLat, prevLng] = lastPositionRef.current;
+
+        // Determine if this is a "new" point or just a re-render
+        // If exact same position, we might skip unless we want to force buffer consistency
+        // But for live tracking, we usually get different timestamps.
+
+        const now = Date.now();
+        const time = timestamp || now;
+
+        // Push to buffer
+        // Prevent duplicate adjacent points in buffer to avoid zero-duration moves, unless rotation changed?
+        const lastInBuffer = bufferRef.current.length > 0 ? bufferRef.current[bufferRef.current.length - 1] : null;
+        if (lastInBuffer && lastInBuffer.lat === lat && lastInBuffer.lng === lng && lastInBuffer.time === time) {
+            return;
+        }
+
+        bufferRef.current.push({ lat, lng, time, rotation });
+        lastPositionRef.current = position;
+
+    }, [position[0], position[1], rotation, timestamp]);
+
+    // Track the time of the point we are currently AT (or started animation from)
+    const lastProcessedTimeRef = useRef<number>(timestamp || Date.now());
+
+    // Track current rotation for smooth transitions
+    const lastRotationRef = useRef<number>(rotation);
+
+    // Stable event handlers
+    const onSelectRef = useRef(onSelect);
+    const onDoubleClickRef = useRef(onDoubleClick);
+    useEffect(() => {
+        onSelectRef.current = onSelect;
+        onDoubleClickRef.current = onDoubleClick;
+    }, [onSelect, onDoubleClick]);
+
+    const eventHandlers = useMemo(() => ({
+        click: (e: any) => {
+            if (onSelectRef.current) onSelectRef.current();
+        },
+        dblclick: (e: any) => {
+            if (onDoubleClickRef.current) onDoubleClickRef.current();
+        }
+    }), []); // Empty dependency array = stable handlers
+
+    // Animation Loop
     useEffect(() => {
         const marker = markerRef.current;
         if (!marker) return;
 
-        // Cancel previous animation
-        if (requestRef.current) {
-            cancelAnimationFrame(requestRef.current);
-        }
+        const animate = (currentTime: number) => {
+            // 1. If no animation running, try to pick next segment
+            if (!animationRef.current) {
+                // User requested "jump back 2 points" / smooth gliding.
+                // We enforce a buffer lag: We need at least 2 points ([Start, End]) to animate a segment physically.
+                // We do NOT consume the buffer until we have enough points to maintain a flow?
+                // Or simply: If buffer has [A, B], we animate A -> B.
+                // To prevent "stop-start", we ideally want [A, B, C] so when A->B finishes, we immediately have B->C.
+                // But [A, B] is the minimum to move at all.
 
-        // Get current visual position to start animation from
-        // This prevents jumping back if an update arrives mid-animation
-        const currentLatLng = marker.getLatLng();
-        const startLat = currentLatLng.lat;
-        const startLng = currentLatLng.lng;
+                if (bufferRef.current.length > 1) {
+                    const startPoint = bufferRef.current[0];
+                    const targetPoint = bufferRef.current[1];
 
-        // Target (new position)
-        const targetLat = position[0];
-        const targetLng = position[1];
+                    // We remove startPoint, as we are now "departing" it.
+                    // Ideally check if we are physically close to startPoint?
+                    // For robustness, we assume we are at startPoint (or close enough) and glide to target.
+                    // If we drifted, we might snap or lerp?
+                    // Let's trust the sequence.
+                    bufferRef.current.shift();
 
-        // If practically same, skip
-        if (Math.abs(startLat - targetLat) < 0.000001 && Math.abs(startLng - targetLng) < 0.000001) {
-            return;
-        }
+                    // Calculate Duration
+                    const timeDelta = targetPoint.time - startPoint.time;
+                    let duration = 2000; // Default smooth speed (2s)
 
-        startTimeRef.current = null;
+                    // Use authentic time difference if reasonable (between 500ms and 60s)
+                    if (timeDelta > 500 && timeDelta < 60000) {
+                        duration = timeDelta;
+                    }
 
-        const animate = (time: number) => {
-            if (startTimeRef.current === null) startTimeRef.current = time;
-            const elapsed = time - startTimeRef.current;
-            const progress = Math.min(elapsed / duration, 1);
+                    // If buffer is getting too full (>4), speed up to catch up
+                    if (bufferRef.current.length > 4) {
+                        duration = Math.max(200, duration / 2);
+                    }
 
-            // Linear interpolation
-            const lat = startLat + (targetLat - startLat) * progress;
-            const lng = startLng + (targetLng - startLng) * progress;
+                    animationRef.current = {
+                        startLat: startPoint.lat,
+                        startLng: startPoint.lng,
+                        startTime: currentTime,
+                        duration: duration,
+                        targetLat: targetPoint.lat,
+                        targetLng: targetPoint.lng,
+                        targetRotation: targetPoint.rotation,
+                        startRotation: startPoint.rotation // animate from A's rotation to B's rotation
+                    };
 
-            marker.setLatLng([lat, lng]);
+                    // Snap to start position perfectly before moving (fixes drift from previous interpolation errors)
+                    marker.setLatLng([startPoint.lat, startPoint.lng]);
 
-            if (progress < 1) {
-                requestRef.current = requestAnimationFrame(animate);
-            } else {
-                startTimeRef.current = null;
+                    lastProcessedTimeRef.current = targetPoint.time;
+                }
             }
+
+            // 2. If animation IS running, progress it
+            if (animationRef.current) {
+                const anim = animationRef.current;
+                const elapsed = currentTime - anim.startTime;
+                let progress = elapsed / anim.duration;
+
+                if (progress >= 1) {
+                    progress = 1;
+                    marker.setLatLng([anim.targetLat, anim.targetLng]);
+
+                    // Final rotation ensure
+                    const iconEl = marker.getElement();
+                    if (iconEl) {
+                        const inner = iconEl.querySelector('div') as HTMLElement;
+                        if (inner) inner.style.transform = `rotate(${anim.targetRotation}deg)`;
+                    }
+
+                    lastRotationRef.current = anim.targetRotation;
+                    animationRef.current = null;
+                } else {
+                    // Linear interpolation (could use ease-out for smoother feel, but linear is best for continuous tracking)
+                    const lat = anim.startLat + (anim.targetLat - anim.startLat) * progress;
+                    const lng = anim.startLng + (anim.targetLng - anim.startLng) * progress;
+                    marker.setLatLng([lat, lng]);
+
+                    // Interpolate rotation (shortest path)
+                    let startRot = anim.startRotation;
+                    let endRot = anim.targetRotation;
+                    // Handle wrap around 360
+                    if (endRot - startRot > 180) endRot -= 360;
+                    if (startRot - endRot > 180) startRot -= 360;
+
+                    const currentRot = startRot + (endRot - startRot) * progress;
+
+                    const iconEl = marker.getElement();
+                    if (iconEl) {
+                        const inner = iconEl.querySelector('div') as HTMLElement;
+                        if (inner) inner.style.transform = `rotate(${currentRot}deg)`;
+                    }
+                }
+            }
+
+            requestRef.current = requestAnimationFrame(animate);
         };
 
         requestRef.current = requestAnimationFrame(animate);
@@ -243,77 +413,58 @@ const MovingMarker = ({ position, icon, children, onSelect, onDoubleClick }: { p
         return () => {
             if (requestRef.current) cancelAnimationFrame(requestRef.current);
         };
-    }, [position[0], position[1]]); // Trigger only when coordinates change
-
-    // Update icon if it changes
-    useEffect(() => {
-        if (markerRef.current) {
-            markerRef.current.setIcon(icon);
-        }
-    }, [icon]);
-
-    // Click handling with debounce to separate click vs dblclick
-    const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    }, []); // Run effect once, internal refs handle state
 
     return (
         <Marker
             ref={markerRef}
-            position={initialPos} // Static initial position
-            icon={icon}
-            eventHandlers={{
-                click: () => {
-                    if (clickTimeoutRef.current) {
-                        clearTimeout(clickTimeoutRef.current);
-                        clickTimeoutRef.current = null;
-                        return;
-                    }
-
-                    clickTimeoutRef.current = setTimeout(() => {
-                        if (onSelect) onSelect();
-                        clickTimeoutRef.current = null;
-                    }, 300);
-                },
-                dblclick: () => {
-                    if (clickTimeoutRef.current) {
-                        clearTimeout(clickTimeoutRef.current);
-                        clickTimeoutRef.current = null;
-                    }
-                    if (onDoubleClick) onDoubleClick();
-                }
-            }}
+            position={initialProps.current.position}
+            icon={initialProps.current.icon}
+            eventHandlers={eventHandlers}
         >
             {children}
         </Marker>
     );
 };
 
-export interface MapComponentProps {
-    vehicles: Vehicle[];
-    selectedVehicle?: Vehicle | null;
-    onSelectVehicle?: (vehicle: Vehicle) => void;
-    onDoubleClickVehicle?: (vehicle: Vehicle) => void;
-    livePath?: TripPoint[];
-}
-
-export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicle, onDoubleClickVehicle, livePath }: MapComponentProps) {
+export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicle, onDoubleClickVehicle, livePath, showFullHistory = false }: MapComponentProps) {
     const selectedTrip = selectedVehicle ? mockTripPaths[selectedVehicle.id] : null;
     const [zoom, setZoom] = useState(13); // Default zoom
 
+    // Live Tracking History Duration (Default 15 minutes)
+    const HISTORY_DURATION_MS = 15 * 60 * 1000;
+
+    // Filter livePath to only include points within the history duration
+    const filteredLivePath = useMemo(() => {
+        if (!livePath || livePath.length === 0) return [];
+
+        // If showing full history (e.g. from double click), return all points
+        if (showFullHistory) return livePath;
+
+        const latestPoint = livePath[livePath.length - 1];
+        const latestTime = latestPoint.fixTime ? new Date(latestPoint.fixTime).getTime() : Date.now();
+
+        return livePath.filter(p => {
+            const pTime = p.fixTime ? new Date(p.fixTime).getTime() : 0;
+            return (latestTime - pTime) <= HISTORY_DURATION_MS;
+        });
+    }, [livePath, showFullHistory]);
+
     // Prepare segments for colored line if livePath exists
     const segments = [];
-    if (livePath && livePath.length > 1) {
-        let currentSegment = [livePath[0]];
-        let currentColor = getSpeedColor(livePath[0].speed || 0, selectedVehicle?.maxSpeed);
+    if (filteredLivePath && filteredLivePath.length > 1) {
+        let currentSegment = [filteredLivePath[0]];
+        let currentColor = getSpeedColor(filteredLivePath[0].speed || 0, selectedVehicle?.maxSpeed);
 
-        for (let i = 1; i < livePath.length; i++) {
-            const point = livePath[i];
+        for (let i = 1; i < filteredLivePath.length; i++) {
+            const point = filteredLivePath[i];
             const pointColor = getSpeedColor(point.speed || 0, selectedVehicle?.maxSpeed);
 
             // Add previous point to start of new segment for continuity
             // We just push current point to current segment
             currentSegment.push(point);
 
-            if (pointColor !== currentColor || i === livePath.length - 1) {
+            if (pointColor !== currentColor || i === filteredLivePath.length - 1) {
                 segments.push({
                     positions: currentSegment.map(p => [p.latitude, p.longitude] as [number, number]),
                     color: currentColor
@@ -360,48 +511,47 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
     const minDistance = getMinDistance(zoom);
 
     const visiblePoints = (() => {
-        if (!livePath || livePath.length === 0) return [];
+        if (!filteredLivePath || filteredLivePath.length === 0) return [];
 
-        const latestPoint = livePath[livePath.length - 1];
+        const latestPoint = filteredLivePath[filteredLivePath.length - 1];
         const latestTime = latestPoint.fixTime ? new Date(latestPoint.fixTime).getTime() : Date.now();
-        const oneHourMs = 60 * 60 * 1000;
-        const stationaryThreshold = 100; // Increased to 100 meters to be more aggressive
 
-        // Check if vehicle has been effectively stationary for the last hour
-        // We check if the maximum distance from the latest point in the last hour is small
-        let isStationaryForLastHour = false;
+        const stationaryThreshold = 100;
+
+        // Check if vehicle has been effectively stationary for the last history duration
+        let isStationary = false;
         let maxDist = 0;
 
-        // Scan backwards to find max deviation in last hour
-        for (let i = livePath.length - 1; i >= 0; i--) {
-            const p = livePath[i];
+        // Scan backwards to find max deviation in history window
+        for (let i = filteredLivePath.length - 1; i >= 0; i--) {
+            const p = filteredLivePath[i];
             const pTime = p.fixTime ? new Date(p.fixTime).getTime() : 0;
-            if (latestTime - pTime > oneHourMs) break;
+            if (latestTime - pTime > HISTORY_DURATION_MS) break;
 
             const d = calculateDistance(p.latitude, p.longitude, latestPoint.latitude, latestPoint.longitude);
             if (d > maxDist) maxDist = d;
         }
 
         if (maxDist < stationaryThreshold) {
-            isStationaryForLastHour = true;
+            isStationary = true;
         }
 
         const points: TripPoint[] = [];
         let lastPoint: TripPoint | null = null;
 
-        for (let i = 0; i < livePath.length; i++) {
-            const point = livePath[i];
+        for (let i = 0; i < filteredLivePath.length; i++) {
+            const point = filteredLivePath[i];
 
-            // Stationary Filter: If stationary for last hour, hide points from that hour
-            if (isStationaryForLastHour) {
+            // Stationary Filter: If stationary for duration, hide points
+            if (isStationary) {
                 const pTime = point.fixTime ? new Date(point.fixTime).getTime() : 0;
-                if (latestTime - pTime < oneHourMs) {
+                if (latestTime - pTime < HISTORY_DURATION_MS) {
                     continue;
                 }
             }
 
             // Always include the last point (Unless it was filtered out by stationary check above)
-            if (i === livePath.length - 1) {
+            if (i === filteredLivePath.length - 1) {
                 points.push(point);
                 continue;
             }
@@ -422,8 +572,7 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
     })();
 
     return (
-        <MapContainer center={[51.505, -0.09]} zoom={13} style={{ height: "100%", width: "100%" }}>
-            <ZoomHandler setZoom={setZoom} />
+        <MapContainer center={[51.505, -0.09]} zoom={13} zoomControl={false} style={{ height: "100%", width: "100%" }}>
             <LayersControl position="topright">
                 <LayersControl.BaseLayer name="OpenStreetMap">
                     <TileLayer
@@ -450,6 +599,9 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
                     />
                 </LayersControl.BaseLayer>
             </LayersControl>
+            <ZoomControl position="topright" />
+            <ZoomHandler setZoom={setZoom} />
+            <MapSearchControl />
 
             <MapController selectedVehicle={selectedVehicle} />
 
@@ -467,7 +619,8 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
 
                     {/* Start Marker - Only show if current position is significantly different (> 50m) from start */
                         (() => {
-                            const startPoint = livePath[0];
+                            if (!filteredLivePath || filteredLivePath.length === 0) return null;
+                            const startPoint = filteredLivePath[0];
                             const currentLat = selectedVehicle.lat;
                             const currentLng = selectedVehicle.lng;
                             const dist = Math.sqrt(Math.pow(startPoint.latitude - currentLat, 2) + Math.pow(startPoint.longitude - currentLng, 2));
@@ -475,7 +628,7 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
                             if (dist > 0.0005) {
                                 return (
                                     <Marker position={[startPoint.latitude, startPoint.longitude]} icon={startIcon}>
-                                        <Popup>Start of History (1h ago)</Popup>
+                                        <Popup>{showFullHistory ? "Start of Day History" : "Start of History (15m ago)"}</Popup>
                                     </Marker>
                                 );
                             }
@@ -546,35 +699,56 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
             )}
 
             {/* Render Vehicles with Smooth Motion */}
-            {vehicles.map((vehicle) => (
-                <MovingMarker
-                    key={vehicle.id}
-                    position={[vehicle.lat, vehicle.lng]}
-                    icon={createVehicleIcon(vehicle.icon || "default", vehicle.category)}
-                    onSelect={() => {
-                        if (onSelectVehicle) {
-                            onSelectVehicle(vehicle);
-                        }
-                    }}
-                    onDoubleClick={() => {
-                        if (onDoubleClickVehicle) {
-                            onDoubleClickVehicle(vehicle);
-                        }
-                    }}
-                >
-                    <Popup>
-                        <div className="p-1">
-                            <h3 className="font-bold">{vehicle.name}</h3>
-                            <p className="text-sm text-gray-600">{vehicle.model}</p>
-                            <p className="text-xs text-gray-500 mt-1">Status: {vehicle.status}</p>
-                            <p className="text-xs text-gray-500">Last update: {vehicle.lastUpdate}</p>
-                            {selectedVehicle?.id === vehicle.id && (
-                                <p className="text-xs text-blue-600 font-medium mt-1">Path Visible</p>
-                            )}
-                        </div>
-                    </Popup>
-                </MovingMarker>
-            ))}
+            {vehicles.map((vehicle) => {
+                // Determine which icon to use
+                // 1. If moving (status='moving' or speed > 0), use Navigation Arrow
+                // 2. Else use created Vehicle Icon
+
+                // Note: Traccar 'status' field isn't always reliable for 'moving' vs 'online', prefer speed or assume 'moving' status means moving.
+                // But let's check basic logic.
+                // Check if moving: Speed > 0.5 kn (approx 1 km/h) or Status is 'moving'
+                const speed = vehicle.speed || (selectedVehicle?.id === vehicle.id && livePath && livePath.length > 0 ? livePath[livePath.length - 1].speed : 0) || 0;
+                const isMoving = (vehicle.status === 'moving' || speed > 1) && vehicle.course !== undefined;
+
+                let icon;
+                if (isMoving && vehicle.course !== undefined) {
+                    icon = createNavigationArrowIcon(vehicle.course);
+                } else {
+                    icon = createVehicleIcon(vehicle.icon || "default", vehicle.category);
+                }
+
+                return (
+                    <MovingMarker
+                        key={vehicle.id}
+                        position={[vehicle.lat, vehicle.lng]}
+                        rotation={vehicle.course || 0}
+                        timestamp={vehicle.lastUpdate ? new Date(vehicle.lastUpdate).getTime() : Date.now()}
+                        icon={icon}
+                        onSelect={() => {
+                            if (onSelectVehicle) {
+                                onSelectVehicle(vehicle);
+                            }
+                        }}
+                        onDoubleClick={() => {
+                            if (onDoubleClickVehicle) {
+                                onDoubleClickVehicle(vehicle);
+                            }
+                        }}
+                    >
+                        <Popup>
+                            <div className="p-1">
+                                <h3 className="font-bold">{vehicle.name}</h3>
+                                <p className="text-sm text-gray-600">{vehicle.model}</p>
+                                <p className="text-xs text-gray-500 mt-1">Status: {vehicle.status}</p>
+                                <p className="text-xs text-gray-500">Speed: {selectedVehicle?.id === vehicle.id && livePath && livePath.length > 0 ? ((livePath[livePath.length - 1].speed || 0) * 1.852).toFixed(1) + " km/h" : "-"}</p>
+                                {selectedVehicle?.id === vehicle.id && (
+                                    <p className="text-xs text-blue-600 font-medium mt-1">Live Tracking Active</p>
+                                )}
+                            </div>
+                        </Popup>
+                    </MovingMarker>
+                );
+            })}
         </MapContainer>
     );
 }
