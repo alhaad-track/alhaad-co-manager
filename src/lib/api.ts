@@ -196,4 +196,26 @@ export async function getCommands(params?: URLSearchParams) {
     return fetchJson<any[]>(`/api/commands${query}`);
 }
 
+export async function createCommand(command: any) {
+    return fetchJson<any>("/api/commands", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(command),
+    });
+}
+
+export async function updateCommand(id: string | number, command: any) {
+    return fetchJson<any>(`/api/commands/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(command),
+    });
+}
+
+export async function deleteCommand(id: string | number) {
+    return fetchJson<any>(`/api/commands/${id}`, {
+        method: "DELETE",
+    });
+}
+
 
