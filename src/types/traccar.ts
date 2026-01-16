@@ -37,3 +37,23 @@ export interface SocketData {
     devices?: TraccarDevice[];
     events?: any[];
 }
+
+export interface TraccarNetwork {
+    radioType?: string;
+    mcc?: number;
+    mnc?: number;
+    lac?: number;
+    cid?: number;
+}
+
+export interface TripPoint {
+    latitude: number;
+    longitude: number;
+    speed?: number;
+    course?: number;
+    fixTime?: string;
+    attributes?: Record<string, any>;
+    protocol?: string;
+    address?: string | null;
+    network?: TraccarNetwork;
+}

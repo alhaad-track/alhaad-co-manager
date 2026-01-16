@@ -12,16 +12,12 @@ import { Button } from "@/components/ui/button";
 import { List } from "lucide-react";
 import { traccarApi, getRoute } from "@/lib/api";
 import { useTraccarSocket } from "@/hooks/useTraccarSocket";
-import { SocketData, TraccarPosition, TraccarDevice } from "@/types/traccar";
+import { SocketData, TraccarPosition, TraccarDevice, TripPoint } from "@/types/traccar";
+import CommandDialog from "@/components/tracking/CommandDialog";
+import TripHistoryTable from "@/components/tracking/TripHistoryTable";
 
-// Interface for rich path data
-export interface TripPoint {
-    latitude: number;
-    longitude: number;
-    speed?: number;
-    course?: number;
-    fixTime?: string;
-}
+
+
 
 export default function TrackingPage() {
     const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -30,6 +26,10 @@ export default function TrackingPage() {
     const [isFullHistoryMode, setIsFullHistoryMode] = useState(false);
     const nodeRef = useRef(null);
     const [isMobileListOpen, setIsMobileListOpen] = useState(false);
+
+    // Command Dialog State
+    const [commandDialogOpen, setCommandDialogOpen] = useState(false);
+    const [commandTargetVehicle, setCommandTargetVehicle] = useState<Vehicle | null>(null);
 
     // Initial Fetch (No polling)
     const fetchTrackingData = async () => {
@@ -270,7 +270,11 @@ export default function TrackingPage() {
                     longitude: p.longitude,
                     speed: p.speed,
                     course: p.course,
-                    fixTime: p.fixTime
+                    fixTime: p.fixTime,
+                    attributes: p.attributes,
+                    protocol: p.protocol,
+                    address: p.address,
+                    network: p.network
                 }));
 
                 setVehiclePaths(prev => ({
@@ -308,7 +312,11 @@ export default function TrackingPage() {
                     longitude: p.longitude,
                     speed: p.speed,
                     course: p.course,
-                    fixTime: p.fixTime
+                    fixTime: p.fixTime,
+                    attributes: p.attributes,
+                    protocol: p.protocol,
+                    address: p.address,
+                    network: p.network
                 }));
 
                 setVehiclePaths(prev => ({
@@ -319,6 +327,11 @@ export default function TrackingPage() {
         } catch (e) {
             console.error("Failed to load full day history", e);
         }
+    };
+
+    const handleSendCommandTrigger = (vehicle: Vehicle) => {
+        setCommandTargetVehicle(vehicle);
+        setCommandDialogOpen(true);
     };
 
     return (
@@ -337,8 +350,23 @@ export default function TrackingPage() {
                         onDoubleClickVehicle={handleDoubleClickVehicle}
                         livePath={selectedVehicle ? vehiclePaths[selectedVehicle.id] : undefined}
                         showFullHistory={isFullHistoryMode}
+                        onSendCommand={handleSendCommandTrigger}
+                        onShowHistory={handleDoubleClickVehicle}
                     />
                 </div>
+
+                <CommandDialog
+                    isOpen={commandDialogOpen}
+                    onClose={() => setCommandDialogOpen(false)}
+                    vehicle={commandTargetVehicle}
+                />
+
+                {isFullHistoryMode && selectedVehicle && vehiclePaths[selectedVehicle.id] && (
+                    <TripHistoryTable
+                        data={vehiclePaths[selectedVehicle.id]}
+                        onClose={() => setIsFullHistoryMode(false)}
+                    />
+                )}
 
                 {/* Mobile Vehicle List Trigger */}
                 <div className="absolute top-4 left-4 z-10 md:hidden">

@@ -55,6 +55,7 @@ export default function DashboardLayout({
                     { href: "/dashboard/geofences", label: "Geofences", icon: Hexagon },
                     { href: "/dashboard/drivers", label: "Drivers", icon: User },
                     { href: "/dashboard/alerts", label: "Alerts", icon: Bell },
+                    { href: "/dashboard/saved-commands", label: "Saved Commands", icon: FileText },
                     { href: "/dashboard/reports", label: "Reports", icon: FileText },
                 ].map((item) => {
                     const isActive = item.href === "/dashboard"

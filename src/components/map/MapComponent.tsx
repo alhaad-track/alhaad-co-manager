@@ -79,6 +79,59 @@ const AddressDisplay = ({ lat, lng }: { lat: number, lng: number }) => {
     return <span>{address || "Unknown location"}</span>;
 };
 
+const ManualAddressDisplay = ({ lat, lng }: { lat: number, lng: number }) => {
+    const [address, setAddress] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(false);
+
+    const fetchAddress = (e: React.MouseEvent) => {
+        e.stopPropagation(); // Prevent map click propagation
+        e.preventDefault();
+
+        setLoading(true);
+        setError(false);
+
+        reverseGeocode(lat, lng)
+            .then((addr) => setAddress(addr || "Address not found"))
+            .catch(() => {
+                setError(true);
+                setAddress(null);
+            })
+            .finally(() => setLoading(false));
+    };
+
+    if (address) {
+        return <p className="text-xs text-gray-700 mt-1 border-t pt-1 break-words">{address}</p>;
+    }
+
+    if (loading) {
+        return <p className="text-xs text-blue-500 italic mt-1">Resolving location...</p>;
+    }
+
+    if (error) {
+        return (
+            <div className="mt-1">
+                <p className="text-xs text-red-500 mb-1">Failed to resolve</p>
+                <button
+                    onClick={fetchAddress}
+                    className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded border border-gray-300 transition-colors"
+                >
+                    Retry
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <button
+            onClick={fetchAddress}
+            className="mt-2 text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 px-2 py-1 rounded border border-blue-200 transition-colors w-full text-center"
+        >
+            Show Address
+        </button>
+    );
+};
+
 export interface TripPoint {
     latitude: number;
     longitude: number;
@@ -94,6 +147,8 @@ export interface MapComponentProps {
     onDoubleClickVehicle?: (vehicle: Vehicle) => void;
     livePath?: TripPoint[];
     showFullHistory?: boolean;
+    onSendCommand?: (vehicle: Vehicle) => void;
+    onShowHistory?: (vehicle: Vehicle) => void;
 }
 
 function MapController({ selectedVehicle }: { selectedVehicle?: Vehicle | null }) {
@@ -325,25 +380,34 @@ const MovingMarker = ({ position, rotation, icon, timestamp, children, onSelect,
                     const targetPoint = bufferRef.current[1];
 
                     // We remove startPoint, as we are now "departing" it.
-                    // Ideally check if we are physically close to startPoint?
-                    // For robustness, we assume we are at startPoint (or close enough) and glide to target.
-                    // If we drifted, we might snap or lerp?
-                    // Let's trust the sequence.
                     bufferRef.current.shift();
 
                     // Calculate Duration
-                    const timeDelta = targetPoint.time - startPoint.time;
-                    let duration = 2000; // Default smooth speed (2s)
+                    // For live tracking, we want to be responsive. We shouldn't use the historical `timeDelta` (e.g. 30s) as the visual duration.
+                    // Instead, we glide to the new point quickly (e.g. 1.5s or faster if backlog exists).
 
-                    // Use authentic time difference if reasonable (between 500ms and 60s)
-                    if (timeDelta > 500 && timeDelta < 60000) {
-                        duration = timeDelta;
+                    const backlog = bufferRef.current.length;
+
+                    // Base duration for a "nice" glide
+                    let duration = 1500;
+
+                    // If we have a backlog (more points coming in than we are showing), speed up!
+                    if (backlog > 2) {
+                        // processing 5 points? do each in 200ms
+                        duration = 1000 / (backlog / 2);
+                    } else if (backlog > 5) {
+                        duration = 100; // Super fast catchup
                     }
 
-                    // If buffer is getting too full (>4), speed up to catch up
-                    if (bufferRef.current.length > 4) {
-                        duration = Math.max(200, duration / 2);
-                    }
+                    // Lower bound (don't go instantly unless huge lag) and Upper bound (don't take forever)
+                    duration = Math.max(150, Math.min(duration, 2000));
+
+                    // Special case: If the distance is TINY, don't take 1.5s
+                    // const dist = Math.sqrt(Math.pow(targetPoint.lat - startPoint.lat, 2) + Math.pow(targetPoint.lng - startPoint.lng, 2));
+                    // if (dist < 0.0001) duration = 500; // Short hop
+
+                    // Note: We ignore targetPoint.time - startPoint.time for duration calculation
+                    // because we want "Live Sync", not "Historical Replay".
 
                     animationRef.current = {
                         startLat: startPoint.lat,
@@ -427,7 +491,7 @@ const MovingMarker = ({ position, rotation, icon, timestamp, children, onSelect,
     );
 };
 
-export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicle, onDoubleClickVehicle, livePath, showFullHistory = false }: MapComponentProps) {
+export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicle, onDoubleClickVehicle, livePath, showFullHistory = false, onSendCommand, onShowHistory }: MapComponentProps) {
     const selectedTrip = selectedVehicle ? mockTripPaths[selectedVehicle.id] : null;
     const [zoom, setZoom] = useState(13); // Default zoom
 
@@ -718,6 +782,8 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
                 }
 
                 return (
+
+
                     <MovingMarker
                         key={vehicle.id}
                         position={[vehicle.lat, vehicle.lng]}
@@ -735,20 +801,76 @@ export default function MapComponent({ vehicles, selectedVehicle, onSelectVehicl
                             }
                         }}
                     >
-                        <Popup>
+                        <Popup minWidth={220}>
                             <div className="p-1">
-                                <h3 className="font-bold">{vehicle.name}</h3>
-                                <p className="text-sm text-gray-600">{vehicle.model}</p>
-                                <p className="text-xs text-gray-500 mt-1">Status: {vehicle.status}</p>
-                                <p className="text-xs text-gray-500">Speed: {selectedVehicle?.id === vehicle.id && livePath && livePath.length > 0 ? ((livePath[livePath.length - 1].speed || 0) * 1.852).toFixed(1) + " km/h" : "-"}</p>
+                                <div className="flex justify-between items-start mb-2 border-b pb-2">
+                                    <div>
+                                        <h3 className="font-bold text-base text-gray-900">{vehicle.name}</h3>
+                                        <p className="text-xs text-gray-500">{vehicle.model}</p>
+                                    </div>
+                                    <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${vehicle.status === 'online' ? 'bg-green-100 text-green-700' :
+                                        vehicle.status === 'moving' ? 'bg-blue-100 text-blue-700' :
+                                            vehicle.status === 'offline' ? 'bg-gray-100 text-gray-700' :
+                                                'bg-yellow-100 text-yellow-800'
+                                        }`}>
+                                        {vehicle.status}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1 text-xs text-gray-600">
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-400">Speed:</span>
+                                        <span className="font-medium text-gray-900">
+                                            {selectedVehicle?.id === vehicle.id && livePath && livePath.length > 0
+                                                ? ((livePath[livePath.length - 1].speed || 0) * 1.852).toFixed(1)
+                                                : (vehicle.speed ? (vehicle.speed * 1.852).toFixed(1) : "0.0")} km/h
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-400">Last Update:</span>
+                                        <span className="font-medium text-gray-900 max-w-[120px] truncate text-right" title={vehicle.lastUpdate}>
+                                            {vehicle.lastUpdate ? new Date(vehicle.lastUpdate).toLocaleTimeString() : "-"}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-400">IMEI:</span>
+                                        <span className="font-medium text-gray-900">{vehicle.imei}</span>
+                                    </div>
+                                </div>
+
+                                <ManualAddressDisplay lat={vehicle.lat} lng={vehicle.lng} />
+
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (onSendCommand) onSendCommand(vehicle);
+                                    }}
+                                    className="mt-2 text-xs bg-red-50 text-red-600 hover:bg-red-100 px-2 py-1 rounded border border-red-200 transition-colors w-full text-center"
+                                >
+                                    Send Command
+                                </button>
+
+
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (onShowHistory) onShowHistory(vehicle);
+                                    }}
+                                    className="mt-1 text-xs bg-green-50 text-green-600 hover:bg-green-100 px-2 py-1 rounded border border-green-200 transition-colors w-full text-center"
+                                >
+                                    Today Travel
+                                </button>
+
                                 {selectedVehicle?.id === vehicle.id && (
-                                    <p className="text-xs text-blue-600 font-medium mt-1">Live Tracking Active</p>
+                                    <div className="mt-2 text-center bg-blue-50 py-1 rounded border border-blue-100">
+                                        <p className="text-[10px] text-blue-600 font-medium">Live Tracking Active</p>
+                                    </div>
                                 )}
                             </div>
                         </Popup>
                     </MovingMarker>
                 );
             })}
-        </MapContainer>
+        </MapContainer >
     );
 }
