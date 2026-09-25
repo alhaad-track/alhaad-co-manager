@@ -10,7 +10,7 @@ import Draggable from "react-draggable";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { List } from "lucide-react";
-import { traccarApi, getRoute } from "@/lib/api";
+import { getDevices, getLatestPositions, getRoute } from "@/lib/api";
 import { useTraccarSocket } from "@/hooks/useTraccarSocket";
 import { SocketData, TraccarPosition, TraccarDevice, TripPoint } from "@/types/traccar";
 import CommandDialog from "@/components/tracking/CommandDialog";
@@ -35,16 +35,10 @@ export default function TrackingPage() {
     const fetchTrackingData = async () => {
         try {
             // 1. Fetch all devices
-            const devicesRes = await traccarApi("/api/devices");
-            if (!devicesRes.ok) return;
-            const devices = await devicesRes.json();
+            const devices = await getDevices();
 
             // 2. Fetch all latest positions
-            const positionsRes = await traccarApi("/api/positions");
-            let positions: any[] = [];
-            if (positionsRes.ok) {
-                positions = await positionsRes.json();
-            }
+            const positions = await getLatestPositions(devices.map((d: any) => d.id)).catch(() => []);
 
             // 3. Map Data
             const updatedVehicles: Vehicle[] = devices.map((device: any) => {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { initialVehicles, Vehicle, User, Driver } from "@/lib/data";
-import { traccarApi, getUsers, getDrivers } from "@/lib/api";
+import { getDevices, getUsers, getDrivers } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, Search, Truck, Car, AlertCircle, Ship, Plane, Bike, User as UserIcon, Bus, Anchor, Tractor } from "lucide-react";
@@ -20,32 +20,47 @@ export default function VehiclesPage() {
     useEffect(() => {
         const fetchVehicles = async () => {
             try {
-                // Fetch from server-side aggregation endpoint
-                const response = await fetch("/api/custom/vehicles");
+                // Devices come from the Go API; users/drivers are Traccar-only, so they're optional
+                const [devices, users, drivers] = await Promise.all([
+                    getDevices(),
+                    getUsers().catch(() => [] as any[]),
+                    getDrivers().catch(() => [] as any[]),
+                ]);
 
-                if (!response.ok) {
-                    throw new Error("Failed to fetch vehicles");
-                }
-                const data = await response.json();
+                // Build device -> owner map via the Go API's ?userId= filter
+                const deviceUserMap = new Map<number, number>();
+                const userDevices = await Promise.all(
+                    users.map((u: any) =>
+                        getDevices(new URLSearchParams({ userId: u.id.toString() }))
+                            .then(list => ({ userId: u.id, list }))
+                            .catch(() => ({ userId: u.id, list: [] as any[] }))
+                    )
+                );
+                userDevices.forEach(({ userId, list }) => list.forEach((d: any) => deviceUserMap.set(d.id, userId)));
 
-                // Start mapping
-                const mappedVehicles = data.map((device: any) => ({
-                    id: device.id,
-                    name: device.name,
-                    model: device.model,
-                    imei: device.imei,
-                    userId: device.userId,
-                    driverId: device.driverId,
-                    userName: device.userName,
-                    driverName: device.driverName,
-                    status: device.status,
-                    lastUpdate: new Date(device.lastUpdate).toLocaleString(),
-                    lat: 0,
-                    lng: 0,
-                    icon: device.category || "default",
-                    category: device.category,
-                    positionId: device.positionId,
-                }));
+                const mappedVehicles = devices.map((device: any) => {
+                    const userId = deviceUserMap.get(device.id) || device.attributes?.userId;
+                    const driverId = device.attributes?.driverId;
+                    const user = users.find((u: any) => u.id === userId);
+                    const driver = drivers.find((d: any) => d.id === driverId);
+                    return {
+                        id: device.id.toString(),
+                        name: device.name,
+                        model: device.model || "Unknown Model",
+                        imei: device.uniqueId,
+                        userId: userId?.toString(),
+                        driverId: driverId?.toString(),
+                        userName: user ? user.name : "Unassigned",
+                        driverName: driver ? (driver.name || `${driver.firstName} ${driver.lastName}`) : "Unassigned",
+                        status: device.status,
+                        lastUpdate: device.lastUpdate ? new Date(device.lastUpdate).toLocaleString() : "-",
+                        lat: 0,
+                        lng: 0,
+                        icon: device.category || "default",
+                        category: device.category,
+                        positionId: device.positionId?.toString(),
+                    };
+                });
 
                 setVehicles(mappedVehicles);
             } catch (err) {
