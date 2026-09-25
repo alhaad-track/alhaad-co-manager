@@ -1,7 +1,6 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from "react";
-import { traccarApi } from "@/lib/api";
 import { SocketData } from "@/types/traccar";
 
 interface SocketContextType {
@@ -41,21 +40,10 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
 
             try {
                 setStatus("connecting");
-                // 1. Get a session token via the Proxy
-                const tokenRes = await traccarApi("/api/session/token", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                    body: "expiration=" + new Date(Date.now() + 86400000).toISOString()
-                });
-
-                if (!tokenRes.ok) throw new Error("Failed to get session token");
-
-                const tokenData = await tokenRes.text();
-
                 if (!isMounted) return;
 
-                // 1. Connect Directly
-                const wsUrl = `${process.env.NEXT_PUBLIC_TRACCAR_SOCKET_URL}?token=${tokenData}`;
+                // Go API live stream (Redis pub/sub of forwarded Traccar positions)
+                const wsUrl = process.env.NEXT_PUBLIC_GO_SOCKET_URL || "ws://localhost:8080/ws/live";
                 console.log("[SocketContext] Connecting...");
 
                 const socket = new WebSocket(wsUrl);
@@ -68,7 +56,13 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
 
                 socket.onmessage = (event) => {
                     try {
-                        const data = JSON.parse(event.data);
+                        const message = JSON.parse(event.data);
+                        if (message.error) {
+                            console.warn("[SocketContext] Server:", message.error);
+                            return;
+                        }
+                        // Go API sends one raw position per message; wrap it in Traccar's socket shape
+                        const data: SocketData = message.deviceId !== undefined ? { positions: [message] } : message;
                         // Broadcast to all subscribers
                         subscribersRef.current.forEach(callback => callback(data));
                     } catch (err) {

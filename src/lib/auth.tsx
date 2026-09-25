@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { traccarApi } from "@/lib/api";
+import { goLogin, GO_TOKEN_KEY } from "@/lib/api";
 
 interface User {
     id: string;
@@ -36,27 +36,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const login = async (email: string, password: string) => {
-        const params = new URLSearchParams();
-        params.append("email", email);
-        params.append("password", password);
-
         try {
-            const response = await traccarApi("/api/session", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                },
-                body: params,
-            });
-
-            if (!response.ok) {
-                if (response.status === 401) {
-                    throw new Error("Invalid email or password");
-                }
-                throw new Error("Login failed");
-            }
-
-            const data = await response.json();
+            // Authenticate against the Go API (JWT)
+            const { token, user: data } = await goLogin(email, password);
+            localStorage.setItem(GO_TOKEN_KEY, token);
 
             const authenticatedUser: User = {
                 id: data.id.toString(),
@@ -68,7 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(authenticatedUser);
             localStorage.setItem("user", JSON.stringify(authenticatedUser));
 
-            // Store Basic Auth credentials
+            // Keep Basic Auth for the Traccar-only features (CRUD, commands, geocode)
             const basicAuth = 'Basic ' + btoa(email + ':' + password);
             localStorage.setItem("traccar_auth", basicAuth);
 
@@ -89,6 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(null);
         localStorage.removeItem("user");
         localStorage.removeItem("traccar_auth");
+        localStorage.removeItem(GO_TOKEN_KEY);
         router.push("/login");
     };
 

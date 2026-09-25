@@ -39,9 +39,94 @@ async function fetchJson<T>(endpoint: string, options?: RequestInit): Promise<T>
     return res.json();
 }
 
+// ---------------------------------------------------------------------------
+// Go API (alhaad-go-api) — JWT auth, fast reads straight from the Traccar DB
+// ---------------------------------------------------------------------------
+
+export const GO_API_URL = process.env.NEXT_PUBLIC_GO_API_URL || "http://localhost:8080";
+export const GO_TOKEN_KEY = "go_token";
+
+export async function goApi(endpoint: string, options: RequestInit = {}) {
+    const headers: Record<string, string> = {
+        "Accept": "application/json",
+        ...((options.headers as Record<string, string>) || {}),
+    };
+
+    if (typeof window !== "undefined") {
+        const token = localStorage.getItem(GO_TOKEN_KEY);
+        if (token) {
+            headers["Authorization"] = `Bearer ${token}`;
+        }
+    }
+
+    const response = await fetch(`${GO_API_URL}${endpoint}`, { cache: "no-store", ...options, headers });
+
+    // Expired/invalid JWT -> back to login
+    if (response.status === 401 && typeof window !== "undefined" && !endpoint.startsWith("/api/v1/auth/login")) {
+        localStorage.removeItem(GO_TOKEN_KEY);
+        localStorage.removeItem("user");
+        window.location.href = "/login";
+    }
+
+    return response;
+}
+
+async function goJson<T>(endpoint: string, options?: RequestInit): Promise<T> {
+    const res = await goApi(endpoint, options);
+    if (!res.ok) {
+        throw new Error(`Go API request to ${endpoint} failed with status ${res.status}`);
+    }
+    return res.json();
+}
+
+function goPost<T>(endpoint: string, body: unknown): Promise<T> {
+    return goJson<T>(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+}
+
+// Traccar-style params (repeated `deviceId`) -> numeric id array
+function deviceIdsFrom(params: URLSearchParams): number[] {
+    return params.getAll("deviceId").map(Number).filter(id => !Number.isNaN(id));
+}
+
+export async function goLogin(email: string, password: string) {
+    const res = await goApi("/api/v1/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        throw new Error(data.error || (res.status === 401 ? "Invalid email or password" : "Login failed"));
+    }
+    return data as { token: string; expiresAt: string; user: { id: number; name: string; email: string; administrator: boolean } };
+}
+
 export async function getDevices(params?: URLSearchParams) {
-    const query = params ? `?${params.toString()}` : "";
-    return fetchJson<any[]>(`/api/devices${query}`);
+    const query = new URLSearchParams();
+    if (params?.get("userId")) query.set("userId", params.get("userId")!);
+    if (params?.get("groupId")) query.set("groupId", params.get("groupId")!);
+    const qs = query.toString();
+
+    const data = await goJson<{ count: number; devices: any[] }>(`/api/v1/devices${qs ? `?${qs}` : ""}`);
+    let devices = data.devices || [];
+
+    // Traccar supports `?id=`; the Go API doesn't, so filter here
+    const ids = params?.getAll("id");
+    if (ids && ids.length > 0) {
+        devices = devices.filter(d => ids.includes(d.id.toString()));
+    }
+    return devices;
+}
+
+// Latest position for each device (replaces Traccar's GET /api/positions)
+export async function getLatestPositions(deviceIds: number[]) {
+    if (deviceIds.length === 0) return [];
+    const data = await goPost<{ count: number; positions: any[] }>("/api/v1/positions/latest", { deviceIds });
+    return data.positions || [];
 }
 
 export async function createDevice(device: any) {
@@ -132,7 +217,18 @@ export async function deleteGeofence(id: string | number) {
 }
 
 export async function getEvents(params: URLSearchParams) {
-    return fetchJson<any[]>(`/api/reports/events?${params.toString()}`);
+    const deviceIds = deviceIdsFrom(params);
+    if (deviceIds.length === 0) return [];
+    const types = params.getAll("type").filter(t => t && t !== "allEvents");
+    const data = await goPost<{ count: number; events: any[] }>("/api/v1/reports/events", {
+        deviceIds,
+        types: types.length > 0 ? types : undefined,
+        from: params.get("from") || undefined,
+        to: params.get("to") || undefined,
+        limit: 5000,
+    });
+    // Go returns the event time as `serverTime`; the UI reads Traccar's `eventTime`
+    return (data.events || []).map(e => ({ ...e, eventTime: e.serverTime }));
 }
 
 export async function getTrips(params: URLSearchParams) {
@@ -140,7 +236,15 @@ export async function getTrips(params: URLSearchParams) {
 }
 
 export async function getRoute(params: URLSearchParams) {
-    return fetchJson<any[]>(`/api/reports/route?${params.toString()}`);
+    const deviceIds = deviceIdsFrom(params);
+    if (deviceIds.length === 0) return [];
+    const data = await goPost<{ count: number; positions: any[] }>("/api/v1/positions/history", {
+        deviceIds,
+        from: params.get("from") || undefined,
+        to: params.get("to") || undefined,
+        limit: 10000,
+    });
+    return data.positions || [];
 }
 
 export async function getStops(params: URLSearchParams) {
@@ -148,7 +252,14 @@ export async function getStops(params: URLSearchParams) {
 }
 
 export async function getSummary(params: URLSearchParams) {
-    return fetchJson<any[]>(`/api/reports/summary?${params.toString()}`);
+    const deviceIds = deviceIdsFrom(params);
+    if (deviceIds.length === 0) return [];
+    const query = new URLSearchParams();
+    if (params.get("from")) query.set("from", params.get("from")!);
+    if (params.get("to")) query.set("to", params.get("to")!);
+    // Note: the Go API has no `daily` breakdown; it returns one row per device
+    const data = await goPost<{ summaries: any[] }>(`/api/v1/reports/summary?${query.toString()}`, { deviceIds });
+    return data.summaries || [];
 }
 
 export async function getPosition(id: string) {
