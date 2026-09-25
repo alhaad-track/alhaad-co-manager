@@ -159,8 +159,10 @@ export async function deleteDevice(id: string | number) {
     });
 }
 
-export async function getDrivers() {
-    return fetchJson<any[]>("/api/drivers");
+// Drivers come from the Go API, scoped to the caller
+export async function getDrivers(query?: string) {
+    const data = await goJson<{ count: number; drivers: any[] }>(`/api/v1/drivers${query ? `?${query}` : ""}`);
+    return data.drivers || [];
 }
 
 // Users come from the Go API, scoped to the caller (admins: all, managers: their users)

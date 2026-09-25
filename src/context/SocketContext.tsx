@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { SocketData } from "@/types/traccar";
+import { GO_TOKEN_KEY } from "@/lib/api";
 
 interface SocketContextType {
     status: "connecting" | "connected" | "disconnected" | "error";
@@ -33,64 +34,65 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
 
     useEffect(() => {
         let isMounted = true;
-        let reconnectTimer: NodeJS.Timeout;
+        let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+        let attempts = 0;
 
-        const connect = async () => {
-            if (socketRef.current?.readyState === WebSocket.OPEN) return;
+        const scheduleReconnect = () => {
+            if (!isMounted) return;
+            // 2s, 4s, 8s ... capped at 30s
+            const delay = Math.min(30000, 2000 * 2 ** attempts++);
+            reconnectTimer = setTimeout(connect, delay);
+        };
 
-            try {
-                setStatus("connecting");
-                if (!isMounted) return;
+        const connect = () => {
+            if (!isMounted || socketRef.current) return;
 
-                // Go API live stream (Redis pub/sub of forwarded Traccar positions)
-                const wsUrl = process.env.NEXT_PUBLIC_GO_SOCKET_URL || "ws://localhost:8080/ws/live";
-                console.log("[SocketContext] Connecting...");
-
-                const socket = new WebSocket(wsUrl);
-                socketRef.current = socket;
-
-                socket.onopen = () => {
-                    console.log("[SocketContext] Connected");
-                    if (isMounted) setStatus("connected");
-                };
-
-                socket.onmessage = (event) => {
-                    try {
-                        const message = JSON.parse(event.data);
-                        if (message.error) {
-                            console.warn("[SocketContext] Server:", message.error);
-                            return;
-                        }
-                        // Go API sends one raw position per message; wrap it in Traccar's socket shape
-                        const data: SocketData = message.deviceId !== undefined ? { positions: [message] } : message;
-                        // Broadcast to all subscribers
-                        subscribersRef.current.forEach(callback => callback(data));
-                    } catch (err) {
-                        console.error("[SocketContext] Parse Error:", err);
-                    }
-                };
-
-                socket.onclose = (event) => {
-                    console.log("[SocketContext] Disconnected", event.code);
-                    if (isMounted) setStatus("disconnected");
-                    // Reconnect
-                    if (isMounted) {
-                        reconnectTimer = setTimeout(connect, 5000);
-                    }
-                };
-
-                socket.onerror = (error) => {
-                    console.error("[SocketContext] Error:", error);
-                    if (isMounted) setStatus("error");
-                };
-
-            } catch (error) {
-                console.error("[SocketContext] Init Error:", error);
-                if (isMounted) setStatus("error");
-                if (isMounted) {
-                    reconnectTimer = setTimeout(connect, 5000);
-                }
+            // /ws/live requires the Go API JWT; browsers can't send headers, so it goes in the query
+            const token = typeof window !== "undefined" ? localStorage.getItem(GO_TOKEN_KEY) : null;
+            if (!token) {
+                setStatus("disconnected");
+                scheduleReconnect();
+                return;
             }
+
+            setStatus("connecting");
+            const baseUrl = process.env.NEXT_PUBLIC_GO_SOCKET_URL || "ws://localhost:8080/ws/live";
+            const socket = new WebSocket(`${baseUrl}?token=${encodeURIComponent(token)}`);
+            socketRef.current = socket;
+
+            socket.onopen = () => {
+                attempts = 0;
+                console.log("[SocketContext] Connected");
+                setStatus("connected");
+            };
+
+            socket.onmessage = (event) => {
+                try {
+                    const message = JSON.parse(event.data);
+                    if (message.error) {
+                        console.warn("[SocketContext] Server:", message.error);
+                        return;
+                    }
+                    // Go API sends one raw position per message; wrap it in Traccar's socket shape
+                    const data: SocketData = message.deviceId !== undefined ? { positions: [message] } : message;
+                    subscribersRef.current.forEach(callback => callback(data));
+                } catch (err) {
+                    console.error("[SocketContext] Parse Error:", err);
+                }
+            };
+
+            // The browser gives no details on WebSocket errors; onclose always follows and handles it
+            socket.onerror = () => {
+                console.warn(`[SocketContext] Connection to ${baseUrl} failed`);
+            };
+
+            socket.onclose = (event) => {
+                if (socketRef.current === socket) socketRef.current = null;
+                if (!isMounted) return;
+                console.log("[SocketContext] Disconnected", event.code);
+                setStatus("disconnected");
+                scheduleReconnect();
+            };
         };
 
         connect();
@@ -98,9 +100,18 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         return () => {
             isMounted = false;
             clearTimeout(reconnectTimer);
-            if (socketRef.current) {
-                socketRef.current.close();
-                socketRef.current = null;
+            const socket = socketRef.current;
+            socketRef.current = null;
+            if (!socket) return;
+            // Closing a socket that's still connecting makes the browser report an error
+            // (e.g. React Strict Mode's double mount), so wait for it to open first
+            socket.onerror = null;
+            socket.onmessage = null;
+            socket.onclose = null;
+            if (socket.readyState === WebSocket.CONNECTING) {
+                socket.onopen = () => socket.close();
+            } else {
+                socket.close();
             }
         };
     }, []);
