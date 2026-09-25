@@ -187,30 +187,22 @@ export async function deleteUser(id: string | number) {
     return goJson<any>(`/api/v1/users/${id}`, { method: "DELETE" });
 }
 
-export async function getGeofences() {
-    return fetchJson<any[]>("/api/geofences");
+// Geofences come from the Go API, scoped to the caller
+export async function getGeofences(query?: string) {
+    const data = await goJson<{ count: number; geofences: any[] }>(`/api/v1/geofences${query ? `?${query}` : ""}`);
+    return data.geofences || [];
 }
 
 export async function createGeofence(geofence: any) {
-    return fetchJson<any>("/api/geofences", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(geofence),
-    });
+    return goSend<any>("/api/v1/geofences", "POST", geofence);
 }
 
 export async function updateGeofence(id: string | number, geofence: any) {
-    return fetchJson<any>(`/api/geofences/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(geofence),
-    });
+    return goSend<any>(`/api/v1/geofences/${id}`, "PUT", geofence);
 }
 
 export async function deleteGeofence(id: string | number) {
-    return fetchJson<any>(`/api/geofences/${id}`, {
-        method: "DELETE",
-    });
+    return goJson<any>(`/api/v1/geofences/${id}`, { method: "DELETE" });
 }
 
 export async function getEvents(params: URLSearchParams) {
