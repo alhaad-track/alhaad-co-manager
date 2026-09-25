@@ -22,6 +22,11 @@ The Go API reads the same Traccar PostgreSQL database directly and adds Redis ca
 | `POST /api/v1/reports/events` | JWT | `{deviceIds, types, from, to, limit, offset}` → `{count, events}` |
 | `GET /api/v1/reports/summary` | JWT | `?deviceId=&from=&to=` → `{from, to, summaries}` |
 | `POST /api/v1/reports/summary` | JWT | `{deviceIds}` + `?from=&to=` → `{from, to, summaries}` |
+| `GET /api/v1/users` | JWT | `?userId=&deviceId=` → `{count, users}` (admins: all; managers: self + managed; others: self) |
+| `GET /api/v1/users/:id` | JWT | → user |
+| `POST /api/v1/users` | JWT (admin/manager) | Traccar user + `password` → user (201); managers' new users are linked to them |
+| `PUT /api/v1/users/:id` | JWT | fields to change (+ optional `password`) → user |
+| `DELETE /api/v1/users/:id` | JWT | → 204 (not yourself) |
 | `POST /api/v1/telemetry/forward` | `FORWARD_SECRET` | Traccar forwards positions here; they're cached in Redis and published |
 | `WS /ws/live` | **none** | streams every position update from Redis |
 
@@ -40,7 +45,7 @@ Authenticated requests send `Authorization: Bearer <token>`.
 | `POST /api/session/token` + Traccar WebSocket | `src/context/SocketContext.tsx:45` | ⚠️ `/ws/live` exists, but it only sends raw positions. Traccar's socket sends `{devices, positions, events}`, so live alerts would break |
 | `GET /api/reports/trips`, `/api/reports/stops` | trip history, reports | ❌ missing |
 | `/api/devices` POST/PUT/DELETE | vehicle forms | ❌ read-only |
-| `/api/users` CRUD | users pages | ❌ missing |
+| `/api/users` CRUD | users pages | ✅ `/users` (GET list/one, POST, PUT, DELETE), scoped like Traccar; list is wrapped in `{count, users}` |
 | `/api/drivers` | drivers pages | ❌ missing |
 | `/api/geofences` CRUD | geofences | ❌ missing |
 | `/api/permissions` (link/unlink) | vehicle and user assignment | ❌ missing |
@@ -55,7 +60,7 @@ Everything else (CRUD, commands, permissions, geocode, trips and stops) still ha
 
 ## Problems to fix in the Go API before the co-manager uses it
 
-1. **No per-user access control.** The positions, reports and history endpoints never check whether the logged-in user owns the `deviceId`. Any valid JWT can read any vehicle. `/devices` without a `userId` returns every device, and a non-admin can pass someone else's `userId`. The JWT already carries `userId` and `administrator`, so the fix is to filter through `tc_user_device` for non-admins.
+1. ~~**No per-user access control.**~~ *Fixed: device, position and report endpoints are now scoped to the devices the user can access in Traccar.* The positions, reports and history endpoints never check whether the logged-in user owns the `deviceId`. Any valid JWT can read any vehicle. `/devices` without a `userId` returns every device, and a non-admin can pass someone else's `userId`. The JWT already carries `userId` and `administrator`, so the fix is to filter through `tc_user_device` for non-admins.
 2. **`/ws/live` has no authentication** and sends every device's positions to anyone who connects.
 3. **Fallback JWT secret.** If `JWT_SECRET` isn't set, it silently uses the hardcoded `"default-traccar-fast-api-secret-key-change-me"`.
 4. **Two logins.** To use both backends, the co-manager needs a Traccar session and a Go JWT at the same time, so `auth.tsx` would have to log in to both.

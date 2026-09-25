@@ -74,17 +74,25 @@ export async function goApi(endpoint: string, options: RequestInit = {}) {
 async function goJson<T>(endpoint: string, options?: RequestInit): Promise<T> {
     const res = await goApi(endpoint, options);
     if (!res.ok) {
-        throw new Error(`Go API request to ${endpoint} failed with status ${res.status}`);
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Go API request to ${endpoint} failed with status ${res.status}`);
+    }
+    if (res.status === 204) {
+        return {} as T;
     }
     return res.json();
 }
 
-function goPost<T>(endpoint: string, body: unknown): Promise<T> {
+function goSend<T>(endpoint: string, method: string, body: unknown): Promise<T> {
     return goJson<T>(endpoint, {
-        method: "POST",
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
     });
+}
+
+function goPost<T>(endpoint: string, body: unknown): Promise<T> {
+    return goSend<T>(endpoint, "POST", body);
 }
 
 // Traccar-style params (repeated `deviceId`) -> numeric id array
@@ -155,39 +163,26 @@ export async function getDrivers() {
     return fetchJson<any[]>("/api/drivers");
 }
 
+// Users come from the Go API, scoped to the caller (admins: all, managers: their users)
 export async function getUsers(query?: string) {
-    return fetchJson<any[]>(`/api/users${query ? `?${query}` : ""}`);
+    const data = await goJson<{ count: number; users: any[] }>(`/api/v1/users${query ? `?${query}` : ""}`);
+    return data.users || [];
 }
 
 export async function getUser(id: string | number) {
-    // If specific endpoint exists, use it. Otherwise standard generic get.
-    // Traccar usually allows /api/users?userId=X or /api/users/id (sometimes)
-    // Best to use filter if not sure, but let's try direct if supported or fall back to array find if generic
-    // Actually Traccar API for single user is usually /api/users/{id} not supported always, usually /api/users?userId=
-    // Let's implement robustly.
-    return fetchJson<any>(`/api/users/${id}`).catch(() => null);
+    return goJson<any>(`/api/v1/users/${id}`).catch(() => null);
 }
 
 export async function createUser(user: any) {
-    return fetchJson<any>("/api/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(user),
-    });
+    return goSend<any>("/api/v1/users", "POST", user);
 }
 
 export async function updateUser(id: string | number, user: any) {
-    return fetchJson<any>(`/api/users/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(user),
-    });
+    return goSend<any>(`/api/v1/users/${id}`, "PUT", user);
 }
 
 export async function deleteUser(id: string | number) {
-    return fetchJson<any>(`/api/users/${id}`, {
-        method: "DELETE",
-    });
+    return goJson<any>(`/api/v1/users/${id}`, { method: "DELETE" });
 }
 
 export async function getGeofences() {
