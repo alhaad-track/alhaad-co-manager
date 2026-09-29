@@ -117,6 +117,7 @@ export async function getDevices(params?: URLSearchParams) {
     const query = new URLSearchParams();
     if (params?.get("userId")) query.set("userId", params.get("userId")!);
     if (params?.get("groupId")) query.set("groupId", params.get("groupId")!);
+    if (params?.get("driverId")) query.set("driverId", params.get("driverId")!);
     const qs = query.toString();
 
     const data = await goJson<{ count: number; devices: any[] }>(`/api/v1/devices${qs ? `?${qs}` : ""}`);
@@ -137,32 +138,38 @@ export async function getLatestPositions(deviceIds: number[]) {
     return data.positions || [];
 }
 
-export async function createDevice(device: any) {
-    return fetchJson<any>("/api/devices", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(device),
-    });
+export async function getDevice(id: string | number) {
+    return goJson<any>(`/api/v1/devices/${id}`).catch(() => null);
 }
 
-export async function updateDevice(id: string, device: any) {
-    return fetchJson<any>(`/api/devices/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(device),
-    });
+export async function createDevice(device: any) {
+    return goSend<any>("/api/v1/devices", "POST", device);
+}
+
+export async function updateDevice(id: string | number, device: any) {
+    return goSend<any>(`/api/v1/devices/${id}`, "PUT", device);
 }
 
 export async function deleteDevice(id: string | number) {
-    return fetchJson<any>(`/api/devices/${id}`, {
-        method: "DELETE",
-    });
+    return goJson<any>(`/api/v1/devices/${id}`, { method: "DELETE" });
 }
 
 // Drivers come from the Go API, scoped to the caller
 export async function getDrivers(query?: string) {
     const data = await goJson<{ count: number; drivers: any[] }>(`/api/v1/drivers${query ? `?${query}` : ""}`);
     return data.drivers || [];
+}
+
+export async function getDriver(id: string | number) {
+    return goJson<any>(`/api/v1/drivers/${id}`).catch(() => null);
+}
+
+export async function createDriver(driver: any) {
+    return goSend<any>("/api/v1/drivers", "POST", driver);
+}
+
+export async function updateDriver(id: string | number, driver: any) {
+    return goSend<any>(`/api/v1/drivers/${id}`, "PUT", driver);
 }
 
 // Users come from the Go API, scoped to the caller (admins: all, managers: their users)
@@ -220,8 +227,20 @@ export async function getEvents(params: URLSearchParams) {
     return (data.events || []).map(e => ({ ...e, eventTime: e.serverTime }));
 }
 
+// Trips and stops are computed by the Go API with Traccar's default thresholds
+function reportRange(params: URLSearchParams) {
+    return {
+        deviceIds: deviceIdsFrom(params),
+        from: params.get("from") || undefined,
+        to: params.get("to") || undefined,
+    };
+}
+
 export async function getTrips(params: URLSearchParams) {
-    return fetchJson<any[]>(`/api/reports/trips?${params.toString()}`);
+    const body = reportRange(params);
+    if (body.deviceIds.length === 0) return [];
+    const data = await goPost<{ count: number; trips: any[] }>("/api/v1/reports/trips", body);
+    return data.trips || [];
 }
 
 export async function getRoute(params: URLSearchParams) {
@@ -237,7 +256,10 @@ export async function getRoute(params: URLSearchParams) {
 }
 
 export async function getStops(params: URLSearchParams) {
-    return fetchJson<any[]>(`/api/reports/stops?${params.toString()}`);
+    const body = reportRange(params);
+    if (body.deviceIds.length === 0) return [];
+    const data = await goPost<{ count: number; stops: any[] }>("/api/v1/reports/stops", body);
+    return data.stops || [];
 }
 
 export async function getSummary(params: URLSearchParams) {
@@ -251,35 +273,25 @@ export async function getSummary(params: URLSearchParams) {
     return data.summaries || [];
 }
 
-export async function getPosition(id: string) {
-    return fetchJson<any[]>(`/api/positions?id=${id}`);
+// A single position by ID (Traccar's GET /api/positions?id=)
+export async function getPosition(id: string | number) {
+    return goJson<any>(`/api/v1/positions/${id}`);
 }
 
 export async function reverseGeocode(latitude: number, longitude: number) {
-    const res = await traccarApi(`/api/server/geocode?latitude=${latitude}&longitude=${longitude}`);
+    const res = await goApi(`/api/v1/geocode?latitude=${latitude}&longitude=${longitude}`);
     if (!res.ok) throw new Error("Geocoding failed");
     return res.text();
 }
 
-export async function addPermission(permission: { userId?: number; deviceId?: number; driverId?: number; geofenceId?: number;[key: string]: any }) {
-    return fetchJson<any>("/api/permissions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(permission),
-    });
+type Permission = { userId?: number; deviceId?: number; groupId?: number; geofenceId?: number; driverId?: number; managedUserId?: number };
+
+export async function addPermission(permission: Permission) {
+    return goSend<any>("/api/v1/permissions", "POST", permission);
 }
 
-export async function removePermission(permission: { userId?: number; deviceId?: number;[key: string]: any }) {
-    return fetchJson<any>("/api/permissions", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(permission),
-    });
-}
-
-export async function getPermissions(params?: URLSearchParams) {
-    const query = params ? `?${params.toString()}` : "";
-    return fetchJson<any[]>(`/api/permissions${query}`);
+export async function removePermission(permission: Permission) {
+    return goSend<any>("/api/v1/permissions", "DELETE", permission);
 }
 
 

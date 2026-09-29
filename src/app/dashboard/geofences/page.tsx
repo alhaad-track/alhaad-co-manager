@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Geofence } from "@/lib/data";
-import { traccarApi, createGeofence, deleteGeofence, getGeofences } from "@/lib/api";
+import { createGeofence, deleteGeofence, getGeofences } from "@/lib/api";
 import GeofenceMap from "@/components/map/GeofenceMap";
 import { GeofenceMapHandle } from "@/components/map/GeofenceMapComponent";
 import { Button } from "@/components/ui/button";

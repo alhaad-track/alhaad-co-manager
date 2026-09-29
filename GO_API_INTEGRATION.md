@@ -27,6 +27,12 @@ The Go API reads the same Traccar PostgreSQL database directly and adds Redis ca
 | `POST /api/v1/users` | JWT (admin/manager) | Traccar user + `password` → user (201); managers' new users are linked to them |
 | `PUT /api/v1/users/:id` | JWT | fields to change (+ optional `password`) → user |
 | `DELETE /api/v1/users/:id` | JWT | → 204 (not yourself) |
+| `GET/POST/PUT/DELETE /api/v1/devices[/:id]` | JWT | device CRUD; `?driverId=` filter on the list |
+| `GET/POST/PUT/DELETE /api/v1/drivers[/:id]`, `/geofences[/:id]` | JWT | driver and geofence CRUD |
+| `POST/DELETE /api/v1/permissions` | JWT | `{userId, deviceId}` etc. → 204 |
+| `GET /api/v1/positions/:id` | JWT | → position |
+| `GET/POST /api/v1/reports/trips`, `/reports/stops` | JWT | `{deviceIds, from, to}` → `{from, to, count, trips/stops}` |
+| `GET /api/v1/geocode` | JWT | `?latitude=&longitude=` → address as text |
 | `POST /api/v1/telemetry/forward` | `FORWARD_SECRET` | Traccar forwards positions here; they're cached in Redis and published |
 | `WS /ws/live` | **none** | streams every position update from Redis |
 
@@ -43,20 +49,23 @@ Authenticated requests send `Authorization: Bearer <token>`.
 | `GET /api/reports/events` | alerts page, ReportGenerator | ✅ `/reports/events` |
 | `GET /api/reports/summary` | ReportGenerator, TripStats | ✅ `/reports/summary` (output fields are Traccar-compatible) |
 | `POST /api/session/token` + Traccar WebSocket | `src/context/SocketContext.tsx:45` | ⚠️ `/ws/live` exists, but it only sends raw positions. Traccar's socket sends `{devices, positions, events}`, so live alerts would break |
-| `GET /api/reports/trips`, `/api/reports/stops` | trip history, reports | ❌ missing |
-| `/api/devices` POST/PUT/DELETE | vehicle forms | ❌ read-only |
+| `GET /api/reports/trips`, `/api/reports/stops` | trip history, reports | ✅ `POST /reports/trips`, `/reports/stops`, computed from positions with Traccar's default thresholds |
+| `GET /api/positions?id=` | vehicle view, alerts | ✅ `/positions/:id` |
+| `/api/devices` POST/PUT/DELETE | vehicle forms | ✅ `/devices` (GET one, POST, PUT, DELETE); `deviceLimit` and `deviceReadonly` apply |
 | `/api/users` CRUD | users pages | ✅ `/users` (GET list/one, POST, PUT, DELETE), scoped like Traccar; list is wrapped in `{count, users}` |
-| `/api/drivers` | drivers pages | ❌ missing |
-| `/api/geofences` CRUD | geofences | ❌ missing |
-| `/api/permissions` (link/unlink) | vehicle and user assignment | ❌ missing |
-| `/api/commands`, `/api/commands/send` | saved commands, CommandDialog | ❌ missing (sending needs Traccar anyway) |
-| `/api/server/geocode` | alerts, `getAddress` | ❌ missing |
+| `/api/drivers` CRUD | drivers pages | ✅ `/drivers` (GET list/one, POST, PUT, DELETE) |
+| `/api/geofences` CRUD | geofences | ✅ `/geofences` (GET list/one, POST, PUT, DELETE) |
+| `/api/permissions` (link/unlink) | vehicle, driver and user assignment | ✅ `POST`/`DELETE /permissions` |
+| `/api/commands`, `/api/commands/send` | saved commands, CommandDialog | ❌ still Traccar (sending needs Traccar anyway) |
+| `/api/server/geocode` | alerts, `getAddress` | ✅ `/geocode`, via a Nominatim-compatible geocoder (`GEOCODER_URL`) with Redis caching |
+
+Writes go straight to the database. Traccar caches the devices, geofences and links of connected trackers in memory, so its live processing (geofence events, notifications) only sees those changes after the tracker reconnects or Traccar restarts.
 
 ## Where the Go API would help
 
 Use it for the heavy read paths: the tracking page's device and position load, route and history playback, the events and alerts list, and the summary reports. Batch calls like `POST /positions/latest` with many `deviceIds` are where it will beat Traccar.
 
-Everything else (CRUD, commands, permissions, geocode, trips and stops) still has to go to Traccar.
+Only commands still go to Traccar.
 
 ## Problems to fix in the Go API before the co-manager uses it
 

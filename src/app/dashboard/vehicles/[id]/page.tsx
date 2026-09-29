@@ -13,26 +13,8 @@ export default function EditVehiclePage({ params }: { params: Promise<{ id: stri
     useEffect(() => {
         const fetchVehicle = async () => {
             try {
-                // Fetch specific device by ID query (API supports ?id=X)
-                const { traccarApi, getDevices } = await import("@/lib/api");
-
-                let found: any;
-                try {
-                    const res = await traccarApi(`/api/devices?id=${resolvedParams.id}`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        // API returns array for query
-                        found = Array.isArray(data) ? data[0] : data;
-                    }
-                } catch (e) {
-                    console.warn("Direct fetch failed, falling back to list", e);
-                }
-
-                if (!found) {
-                    // Fallback to all devices if single fetch fails
-                    const devices = await getDevices();
-                    found = devices.find((d: any) => d.id.toString() === resolvedParams.id);
-                }
+                const { getDevice } = await import("@/lib/api");
+                const found = await getDevice(resolvedParams.id);
 
                 if (found) {
                     // Normalize data for VehicleForm

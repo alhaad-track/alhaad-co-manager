@@ -66,6 +66,7 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
     const [saleRef, setSaleRef] = useState<string>(() => initialData?.attributes?.saleRef || "");
     const [supportManager, setSupportManager] = useState<string>(() => initialData?.attributes?.supportManager || "");
     const [currentAssignedUserId, setCurrentAssignedUserId] = useState<string | null>(null);
+    const [currentDriverId, setCurrentDriverId] = useState<string | null>(null);
     const [assignedUsers, setAssignedUsers] = useState<any[]>([]);
     const [userToRemove, setUserToRemove] = useState<string | null>(null);
     const [deleteVehicleConfirm, setDeleteVehicleConfirm] = useState(false);
@@ -106,7 +107,15 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
         const initData = async () => {
             if (initialData?.id) {
                 try {
-                    const { getUsers } = await import("@/lib/api");
+                    const { getUsers, getDrivers } = await import("@/lib/api");
+                    getDrivers(`deviceId=${initialData.id}`)
+                        .then(linkedDrivers => {
+                            const driverId = linkedDrivers[0]?.id?.toString() || null;
+                            setCurrentDriverId(driverId);
+                            if (driverId) setFormData(prev => ({ ...prev, driverId }));
+                        })
+                        .catch(e => console.error("Failed to fetch linked driver", e));
+
                     const linkedUsers = await getUsers(`deviceId=${initialData.id}`);
 
                     if (linkedUsers && linkedUsers.length > 0) {
@@ -126,15 +135,6 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
         };
         initData();
     }, [isEditing, initialData?.id]);
-
-    useEffect(() => {
-        if ((initialData as any)?.uniqueId && drivers.length > 0 && !formData.driverId && (initialData as any).driverUniqueId) {
-            const d = drivers.find(d => d.uniqueId === (initialData as any).driverUniqueId);
-            if (d) {
-                setFormData(prev => ({ ...prev, driverId: d.id.toString() }));
-            }
-        }
-    }, [drivers, initialData]);
 
     const [accordionValue, setAccordionValue] = useState("details");
     const [trips, setTrips] = useState<any[]>([]);
@@ -392,17 +392,6 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
 
             const payload: any = { ...finalData };
 
-            if (formData.driverId) {
-                const selectedDriver = drivers.find(d => d.id.toString() === formData.driverId?.toString());
-                if (selectedDriver) {
-                    payload.driverUniqueId = selectedDriver.uniqueId;
-                }
-            } else {
-                if (isEditing && (initialData as any)?.driverUniqueId) {
-                    payload.driverUniqueId = "";
-                }
-            }
-
             if (isEditing && initialData?.id) {
                 await updateDevice(initialData.id, payload);
             } else {
@@ -432,6 +421,18 @@ export default function VehicleForm({ initialData, isEditing = false, readOnly =
                         await addPermission({ userId: newUserId, deviceId: Number(savedDeviceId) });
                     } catch (e) {
                         console.error("Failed to add new permission", e);
+                    }
+                }
+
+                // Drivers are assigned by linking them to the device
+                const newDriverId = formData.driverId ? Number(formData.driverId) : null;
+                const oldDriverId = currentDriverId ? Number(currentDriverId) : null;
+                if (newDriverId !== oldDriverId) {
+                    try {
+                        if (oldDriverId) await removePermission({ deviceId: Number(savedDeviceId), driverId: oldDriverId });
+                        if (newDriverId) await addPermission({ deviceId: Number(savedDeviceId), driverId: newDriverId });
+                    } catch (e) {
+                        console.error("Failed to update driver assignment", e);
                     }
                 }
             }

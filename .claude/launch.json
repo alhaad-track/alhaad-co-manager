@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "co-manager-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "go-api",
+      "runtimeExecutable": "D:\\GOOOOO\\bin\\go.exe",
+      "runtimeArgs": ["-C", "../alhaad-go-api", "run", "."],
+      "port": 8080
+    }
+  ]
+}

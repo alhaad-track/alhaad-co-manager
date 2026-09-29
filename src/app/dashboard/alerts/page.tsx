@@ -16,7 +16,7 @@ import { AlertTriangle, MapPin, Clock, CheckCircle2, XCircle, Filter, Gauge, Inf
 import { initialVehicles, initialGeofences } from "@/lib/data";
 import { generateAlerts, Alert } from "@/lib/geofenceUtils";
 import { cn } from "@/lib/utils";
-import { traccarApi, getDevices, getGeofences, getEvents, getPosition, reverseGeocode } from "@/lib/api";
+import { getDevices, getGeofences, getEvents, getPosition, reverseGeocode } from "@/lib/api";
 
 function AlertPositionDetails({ positionId, isOpen }: { positionId: string, isOpen: boolean }) {
     const [position, setPosition] = useState<any>(null);
