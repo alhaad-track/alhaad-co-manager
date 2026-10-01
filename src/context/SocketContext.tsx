@@ -56,7 +56,9 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
             }
 
             setStatus("connecting");
-            const baseUrl = process.env.NEXT_PUBLIC_GO_SOCKET_URL || "ws://localhost:8080/ws/live";
+            // Without an explicit socket URL, derive it from the Go API URL (http -> ws, https -> wss)
+            const apiUrl = process.env.NEXT_PUBLIC_GO_API_URL || "http://localhost:8080";
+            const baseUrl = process.env.NEXT_PUBLIC_GO_SOCKET_URL || `${apiUrl.replace(/^http/, "ws").replace(/\/+$/, "")}/ws/live`;
             const socket = new WebSocket(`${baseUrl}?token=${encodeURIComponent(token)}`);
             socketRef.current = socket;
 
